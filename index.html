@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IND_SHIFT_MGR_V2.0 // 工业班表系统</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        :root {
+            /* 调色板 V2 - 更高对比度 */
+            --bg-paper: #E6E4D8;
+            --bg-dark: #111111;
+            --ink: #000000;
+            
+            --blue: #0033CC;   /* DAY - 国际克莱因蓝 */
+            --yellow: #FFCC00; /* NIGHT - 工业黄 */
+            --red: #FF3300;    /* OFF - 警示红 */
+            --green: #00CC66;  /* STATS - 荧光绿 */
+            --orange: #FF6600; /* READONLY - 橙色 */
+            
+            --border-thick: 3px;
+            --shadow-hard: 6px;
+        }
+
+        * {
+            box-sizing: border-box;
+            border-radius: 0 !important; 
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-paper);
+            color: var(--ink);
+            font-family: 'JetBrains Mono', monospace; /* 更具代码感的字体 */
+            overflow-x: hidden;
+            background-image: 
+                linear-gradient(var(--bg-paper) 2px, transparent 2px),
+                linear-gradient(90deg, var(--bg-paper) 2px, transparent 2px),
+                linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+            background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+            background-position: -2px -2px, -2px -2px, -1px -1px, -1px -1px;
+        }
+
+        /* --- CRT 扫描线覆盖层 (氛围感) --- */
+        .crt-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* --- 布局容器 --- */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            min-height: 100vh;
+            border-left: var(--border-thick) solid var(--ink);
+            border-right: var(--border-thick) solid var(--ink);
+            background: var(--bg-paper);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* 只读模式遮罩 */
+        .readonly-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 102, 0, 0.05);
+            pointer-events: none;
+            display: none;
+            z-index: 1;
+        }
+        .readonly-overlay.active {
+            display: block;
+            border: 5px dashed var(--orange);
+            animation: readonlyPulse 2s infinite;
+        }
+        @keyframes readonlyPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+        }
+
+        /* --- Header --- */
+        header {
+            border-bottom: var(--border-thick) solid var(--ink);
+            padding: 2rem 1rem;
+            background: var(--ink);
+            color: var(--bg-paper);
+            position: relative;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: clamp(2rem, 6vw, 3.5rem);
+            margin: 0;
+            line-height: 1;
+            text-transform: uppercase;
+            letter-spacing: -2px;
+        }
+
+        .meta-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 0.75rem;
+            opacity: 0.8;
+            border-top: 1px dashed var(--bg-paper);
+            padding-top: 10px;
+        }
+
+        /* --- 仪表盘 (Dashboard) --- */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0;
+            border-bottom: var(--border-thick) solid var(--ink);
+        }
+
+        .stat-box {
+            padding: 15px;
+            border-right: var(--border-thick) solid var(--ink);
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .stat-box:last-child { border-right: none; }
+
+        .stat-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px; opacity: 0.6; }
+        .stat-value { font-family: 'Archivo Black', sans-serif; font-size: 2rem; line-height: 1; }
+        
+        /* 统计颜色 */
+        .stat-day .stat-value { color: var(--blue); }
+        .stat-night .stat-value { color: #DDAA00; text-shadow: 1px 1px 0px #000; }
+        .stat-off .stat-value { color: var(--red); }
+
+        /* --- 工具栏 (Tool Deck) --- */
+        .tool-deck {
+            padding: 20px;
+            border-bottom: var(--border-thick) solid var(--ink);
+            background: #f4f4f4;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .month-ctrl {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .month-label {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 1.5rem;
+            min-width: 140px;
+            text-align: center;
+        }
+
+        /* --- 工具选择器 --- */
+        .tool-selector {
+            display: flex;
+            gap: 10px;
+            background: var(--ink);
+            padding: 5px;
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+            transition: opacity 0.3s, filter 0.3s;
+        }
+
+        .tool-selector.disabled {
+            opacity: 0.4;
+            filter: grayscale(1);
+            pointer-events: none;
+        }
+
+        .tool-btn {
+            border: 2px solid transparent;
+            background: var(--bg-paper);
+            color: var(--ink);
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            transition: all 0.1s;
+        }
+
+        .tool-btn:hover { background: #fff; }
+        
+        /* 激活状态 */
+        .tool-btn.active {
+            border-color: #fff;
+            transform: scale(0.9);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        .tool-btn[data-tool="day"].active { background: var(--blue); color: #fff; }
+        .tool-btn[data-tool="night"].active { background: var(--yellow); color: #000; }
+        .tool-btn[data-tool="off"].active { background: var(--red); color: #fff; }
+        .tool-btn[data-tool="erase"].active { background: #fff; text-decoration: line-through; }
+
+        /* --- 通用按钮 --- */
+        .btn {
+            background: transparent;
+            border: 2px solid var(--ink);
+            color: var(--ink);
+            padding: 8px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.8rem;
+            cursor: pointer;
+            box-shadow: 3px 3px 0px var(--ink);
+            text-transform: uppercase;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0px var(--ink); background: #fff; }
+        .btn:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px var(--ink); }
+        
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+        .btn:disabled:hover {
+            transform: none;
+            background: transparent;
+        }
+
+        /* 只读按钮特殊样式 */
+        .btn-readonly {
+            border-color: var(--orange);
+            color: var(--orange);
+            font-weight: 800;
+        }
+        .btn-readonly:hover {
+            background: var(--orange);
+            color: #fff;
+            box-shadow: 4px 4px 0px var(--orange);
+        }
+        .btn-readonly.active {
+            background: var(--orange);
+            color: #fff;
+            box-shadow: inset 0 0 0 2px #fff;
+            animation: readonlyBlink 1s infinite alternate;
+        }
+        @keyframes readonlyBlink {
+            from { opacity: 0.9; }
+            to { opacity: 1; }
+        }
+
+        .btn-group { display: flex; gap: 10px; }
+
+        /* 只读状态指示器 */
+        .readonly-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: var(--orange);
+            color: #fff;
+            padding: 10px 20px;
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 1rem;
+            transform: translateY(-100px);
+            transition: transform 0.3s ease-out;
+            z-index: 1000;
+            box-shadow: 4px 4px 0px #000;
+        }
+        .readonly-indicator.show {
+            transform: translateY(0);
+        }
+
+        /* --- 日历区域 --- */
+        .calendar-area {
+            padding: 20px;
+            background: var(--bg-paper);
+            position: relative;
+            z-index: 2;
+        }
+
+        /* 用来截图的容器 */
+        #capture-target {
+            background: var(--bg-paper); /* 确保截图背景色 */
+            padding: 10px; 
+            border: var(--border-thick) solid var(--ink);
+            transition: filter 0.3s;
+        }
+        #capture-target.readonly {
+            filter: brightness(0.95);
+        }
+
+        .calendar-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            border-bottom: var(--border-thick) solid var(--ink);
+            background: var(--ink);
+            gap: 2px;
+            margin-bottom: 2px;
+        }
+
+        .weekday {
+            background: var(--bg-paper);
+            padding: 10px 0;
+            text-align: center;
+            font-weight: 800;
+            font-size: 0.8rem;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            background: var(--ink);
+            border-bottom: 2px solid var(--ink);
+        }
+
+        .day-cell {
+            background: var(--bg-paper);
+            aspect-ratio: 1 / 0.8; /* 调整格子比例 */
+            position: relative;
+            cursor: crosshair; /* 更有操作感 */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 6px;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        
+        .day-cell.disabled {
+            cursor: not-allowed;
+            filter: grayscale(0.3);
+            pointer-events: none;
+        }
+
+        .date-num {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 1.2rem;
+            opacity: 0.4;
+            line-height: 1;
+            pointer-events: none;
+        }
+
+        .shift-mark {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-align: right;
+            text-transform: uppercase;
+            pointer-events: none;
+            padding: 2px 4px;
+            border: 1px solid transparent;
+        }
+
+        /* 状态样式 */
+        .day-cell.status-day {
+            background: var(--blue); color: #fff;
+            background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.1) 0px, rgba(255,255,255,0.1) 2px, transparent 2px, transparent 10px);
+        }
+        .day-cell.status-day .shift-mark { background: #fff; color: var(--blue); }
+
+        .day-cell.status-night {
+            background: var(--yellow); color: #000;
+        }
+        .day-cell.status-night .shift-mark { background: #000; color: var(--yellow); }
+
+        .day-cell.status-off {
+            background: var(--red); color: #fff;
+            background-image: linear-gradient(135deg, #000 25%, transparent 25%), linear-gradient(225deg, #000 25%, transparent 25%), linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(315deg, #000 25%, transparent 25%);
+            background-position:  10px 0, 10px 0, 0 0, 0 0;
+            background-size: 20px 20px;
+            background-repeat: repeat;
+            opacity: 0.9;
+        }
+        .day-cell.status-off .shift-mark { background: #000; color: #fff; }
+
+        /* Today Highlight */
+        .day-cell.is-today {
+            box-shadow: inset 0 0 0 4px var(--ink) !important;
+            z-index: 5;
+        }
+        .day-cell.is-today::before {
+            content: "NOW";
+            position: absolute;
+            top: 2px; right: 2px;
+            font-size: 0.6rem;
+            background: var(--ink);
+            color: #fff;
+            padding: 0 2px;
+        }
+
+        .empty-cell { background: #dcdad0; pointer-events: none; }
+
+        /* --- Footer --- */
+        footer {
+            margin-top: auto;
+            padding: 20px;
+            border-top: var(--border-thick) solid var(--ink);
+            text-align: center;
+            font-size: 0.7rem;
+            opacity: 0.5;
+            background: var(--bg-paper);
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+            .tool-deck { flex-direction: column; align-items: stretch; gap: 20px; }
+            .month-ctrl { justify-content: space-between; }
+            .tool-selector { justify-content: space-between; }
+            .tool-btn { flex: 1; height: 50px; } /* 更大的触摸区域 */
+            .day-cell { aspect-ratio: 1/1; }
+            h1 { font-size: 2rem; }
+            .readonly-indicator {
+                top: auto;
+                bottom: 10px;
+                font-size: 0.8rem;
+                padding: 8px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="crt-overlay"></div>
+
+    <!-- 只读状态指示器 -->
+    <div class="readonly-indicator" id="readonlyIndicator">
+        🔒 READ ONLY MODE
+    </div>
+
+    <div class="container">
+        <!-- 只读模式遮罩层 -->
+        <div class="readonly-overlay" id="readonlyOverlay"></div>
+
+        <header>
+            <div style="display:flex; align-items:baseline; gap:10px;">
+                <h1>Shift_Mgr_V2</h1>
+                <span style="background:var(--bg-paper); color:var(--ink); padding:2px 6px; font-weight:bold; font-size:0.8rem;">BETA</span>
+                <span id="readonlyBadge" style="display:none; background:var(--orange); color:#fff; padding:2px 6px; font-weight:bold; font-size:0.8rem;">LOCKED</span>
+            </div>
+            <div class="meta-info">
+                <span>// INDUSTRIAL STANDARD</span>
+                <span id="systemTime">SYS_TIME: --:--:--</span>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <div class="stat-box stat-day">
+                <span class="stat-label">Day Shifts (白班)</span>
+                <span class="stat-value" id="countDay">0</span>
+            </div>
+            <div class="stat-box stat-night">
+                <span class="stat-label">Night Shifts (晚班)</span>
+                <span class="stat-value" id="countNight">0</span>
+            </div>
+            <div class="stat-box stat-off">
+                <span class="stat-label">Off Duty (休息)</span>
+                <span class="stat-value" id="countOff">0</span>
+            </div>
+            <div class="stat-box" style="background: var(--ink); color: var(--bg-paper);">
+                <span class="stat-label" style="color:#888;">Total (合计)</span>
+                <span class="stat-value" id="countTotal">0</span>
+            </div>
+        </div>
+
+        <div class="tool-deck">
+            <div class="month-ctrl">
+                <button class="btn" id="prevMonth">PREV</button>
+                <div class="month-label" id="monthLabel">OCT 23</div>
+                <button class="btn" id="nextMonth">NEXT</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <span class="stat-label">MODE SELECTOR</span>
+                <div class="tool-selector" id="toolSelector">
+                    <button class="tool-btn active" data-tool="cursor" title="Toggle Mode">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path></svg>
+                    </button>
+                    <button class="tool-btn" data-tool="day" title="Paint Day Shift" style="color: var(--blue);">D</button>
+                    <button class="tool-btn" data-tool="night" title="Paint Night Shift" style="color: var(--yellow);">N</button>
+                    <button class="tool-btn" data-tool="off" title="Paint Off" style="color: var(--red);">O</button>
+                    <button class="tool-btn" data-tool="erase" title="Eraser">X</button>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-readonly" id="btnReadonly" title="Toggle Read-Only Mode">READONLY</button>
+                <button class="btn" id="btnExportImg" style="color: var(--blue); border-color: var(--blue);">SAVE IMG</button>
+                <button class="btn" id="btnExportJson">DATA</button>
+                <button class="btn" id="btnClear" style="color: var(--red); border-color: var(--red);">CLR</button>
+                <input type="file" id="fileInput" hidden accept=".json">
+            </div>
+        </div>
+
+        <div class="calendar-area">
+            <div id="capture-target">
+                <div id="print-header" style="display:none; border-bottom: 2px solid #000; margin-bottom: 10px; padding-bottom: 5px;">
+                    <h2 style="margin:0; font-family:'Archivo Black'">SHIFT SCHEDULE</h2>
+                    <div id="print-month" style="font-family:'JetBrains Mono'"></div>
+                </div>
+
+                <div class="calendar-header">
+                    <div class="weekday">SUN</div><div class="weekday">MON</div><div class="weekday">TUE</div>
+                    <div class="weekday">WED</div><div class="weekday">THU</div><div class="weekday">FRI</div><div class="weekday">SAT</div>
+                </div>
+                <div class="calendar-grid" id="calendarGrid">
+                    </div>
+                
+                <div style="margin-top: 10px; font-size: 0.6rem; text-align: right; opacity: 0.6; display: none;" id="print-footer">
+                    GENERATED BY IND_SHIFT_MGR
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            SYSTEM STATUS: ONLINE // RENDER: DOM // NO DATA SENT TO SERVER
+        </footer>
+    </div>
+
+    <script>
+        // --- 配置与状态 ---
+        const CONFIG = {
+            storageKey: 'ind_shift_v2_data',
+            readonlyKey: 'ind_shift_v2_readonly',
+            colors: { day: '#0033CC', night: '#FFCC00', off: '#FF3300', none: '#E6E4D8' }
+        };
+
+        const STATE = {
+            currentDate: new Date(),
+            data: JSON.parse(localStorage.getItem(CONFIG.storageKey)) || {},
+            tool: 'cursor', // cursor, day, night, off, erase
+            isDragging: false,
+            readonly: localStorage.getItem(CONFIG.readonlyKey) === 'true' // 恢复只读状态
+        };
+
+        // --- DOM 元素 ---
+        const els = {
+            grid: document.getElementById('calendarGrid'),
+            monthLabel: document.getElementById('monthLabel'),
+            tools: document.querySelectorAll('.tool-btn'),
+            stats: {
+                day: document.getElementById('countDay'),
+                night: document.getElementById('countNight'),
+                off: document.getElementById('countOff'),
+                total: document.getElementById('countTotal')
+            },
+            sysTime: document.getElementById('systemTime'),
+            btnReadonly: document.getElementById('btnReadonly'),
+            toolSelector: document.getElementById('toolSelector'),
+            readonlyOverlay: document.getElementById('readonlyOverlay'),
+            readonlyIndicator: document.getElementById('readonlyIndicator'),
+            readonlyBadge: document.getElementById('readonlyBadge'),
+            captureTarget: document.getElementById('capture-target'),
+            btnClear: document.getElementById('btnClear')
+        };
+
+        // --- 初始化 ---
+        function init() {
+            renderCalendar();
+            updateStats();
+            startClock();
+            
+            // 应用只读状态
+            if (STATE.readonly) {
+                toggleReadonly(true);
+            }
+
+            // 事件绑定
+            document.getElementById('prevMonth').addEventListener('click', () => changeMonth(-1));
+            document.getElementById('nextMonth').addEventListener('click', () => changeMonth(1));
+            document.getElementById('btnExportJson').addEventListener('click', exportJson);
+            document.getElementById('btnExportImg').addEventListener('click', exportImage);
+            document.getElementById('btnClear').addEventListener('click', clearData);
+            
+            // 只读按钮
+            els.btnReadonly.addEventListener('click', () => {
+                toggleReadonly(!STATE.readonly);
+                // 保存只读状态
+                localStorage.setItem(CONFIG.readonlyKey, STATE.readonly);
+            });
+            
+            // 工具选择
+            els.tools.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    if (STATE.readonly) return; // 只读模式下不响应
+                    
+                    els.tools.forEach(b => b.classList.remove('active'));
+                    const target = e.currentTarget;
+                    target.classList.add('active');
+                    STATE.tool = target.dataset.tool;
+                    
+                    // 触觉反馈动画
+                    gsap.fromTo(target, {scale: 0.8}, {scale: 1, duration: 0.2, ease: "back.out(1.7)"});
+                });
+            });
+
+            // 文件导入 (点击 DATA 按钮触发)
+            const input = document.getElementById('fileInput');
+            document.getElementById('btnExportJson').addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (!STATE.readonly) {
+                    input.click(); // 右键点击导出按钮 = 导入
+                }
+            });
+            input.addEventListener('change', importJson);
+
+            // 进场动画
+            gsap.from(".container", {y: 20, opacity: 0, duration: 0.8, ease: "power3.out"});
+        }
+
+        // --- 只读模式切换 ---
+        function toggleReadonly(force = null) {
+            STATE.readonly = force !== null ? force : !STATE.readonly;
+            
+            if (STATE.readonly) {
+                // 激活只读模式
+                els.btnReadonly.classList.add('active');
+                els.btnReadonly.innerHTML = '🔒 UNLOCK';
+                els.toolSelector.classList.add('disabled');
+                els.readonlyOverlay.classList.add('active');
+                els.readonlyIndicator.classList.add('show');
+                els.readonlyBadge.style.display = 'inline-block';
+                els.captureTarget.classList.add('readonly');
+                els.btnClear.disabled = true;
+                
+                // 禁用所有日历格子
+                document.querySelectorAll('.day-cell').forEach(cell => {
+                    cell.classList.add('disabled');
+                });
+                
+                // 显示通知
+                showNotification('READ ONLY MODE ENABLED', 'warning');
+                
+                // 声音效果（如果需要）
+                gsap.fromTo(els.btnReadonly, 
+                    { scale: 1 },
+                    { scale: 1.1, duration: 0.2, yoyo: true, repeat: 1 }
+                );
+            } else {
+                // 退出只读模式
+                els.btnReadonly.classList.remove('active');
+                els.btnReadonly.innerHTML = 'READONLY';
+                els.toolSelector.classList.remove('disabled');
+                els.readonlyOverlay.classList.remove('active');
+                els.readonlyIndicator.classList.remove('show');
+                els.readonlyBadge.style.display = 'none';
+                els.captureTarget.classList.remove('readonly');
+                els.btnClear.disabled = false;
+                
+                // 启用所有日历格子
+                document.querySelectorAll('.day-cell').forEach(cell => {
+                    cell.classList.remove('disabled');
+                });
+                
+                // 显示通知
+                showNotification('EDIT MODE ENABLED', 'success');
+            }
+        }
+
+        // --- 核心逻辑 ---
+
+        function changeMonth(delta) {
+            STATE.currentDate.setMonth(STATE.currentDate.getMonth() + delta);
+            renderCalendar();
+            updateStats();
+        }
+
+        function saveData() {
+            if (STATE.readonly) return; // 只读模式下不保存
+            localStorage.setItem(CONFIG.storageKey, JSON.stringify(STATE.data));
+            updateStats();
+        }
+
+        function getShift(dateStr) {
+            return STATE.data[dateStr] || 'none';
+        }
+
+        function setShift(dateStr, type) {
+            if (STATE.readonly) return; // 只读模式下不修改
+            if (type === 'none') {
+                delete STATE.data[dateStr];
+            } else {
+                STATE.data[dateStr] = type;
+            }
+            saveData();
+            // 局部更新 DOM
+            const cell = document.querySelector(`.day-cell[data-date="${dateStr}"]`);
+            if (cell) updateCellVisual(cell, type);
+        }
+
+        // 交互逻辑
+        function handleInteraction(dateStr) {
+            if (STATE.readonly) {
+                // 只读模式下的反馈
+                gsap.fromTo(els.readonlyIndicator, 
+                    { x: -10 },
+                    { x: 10, duration: 0.1, yoyo: true, repeat: 5 }
+                );
+                return;
+            }
+            
+            const current = getShift(dateStr);
+            let next = 'none';
+
+            if (STATE.tool === 'cursor') {
+                // 轮询模式
+                const cycle = ['none', 'day', 'night', 'off'];
+                const idx = cycle.indexOf(current);
+                next = cycle[(idx + 1) % cycle.length];
+            } else if (STATE.tool === 'erase') {
+                next = 'none';
+            } else {
+                // 笔刷模式 (day, night, off)
+                next = STATE.tool;
+            }
+
+            if (current !== next) {
+                setShift(dateStr, next);
+            }
+        }
+
+        // --- 渲染逻辑 ---
+
+        function renderCalendar() {
+            els.grid.innerHTML = '';
+            const year = STATE.currentDate.getFullYear();
+            const month = STATE.currentDate.getMonth();
+            
+            els.monthLabel.innerText = STATE.currentDate.toLocaleString('en-US', { month: 'short', year: '2-digit' }).toUpperCase();
+
+            const firstDay = new Date(year, month, 1);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const startDay = firstDay.getDay();
+
+            // 填充空白
+            for (let i = 0; i < startDay; i++) {
+                const div = document.createElement('div');
+                div.className = 'day-cell empty-cell';
+                els.grid.appendChild(div);
+            }
+
+            const today = new Date();
+            const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const cell = document.createElement('div');
+                cell.className = 'day-cell';
+                cell.dataset.date = dateStr;
+                
+                // 如果是只读模式，添加disabled类
+                if (STATE.readonly) {
+                    cell.classList.add('disabled');
+                }
+
+                if (isCurrentMonth && day === today.getDate()) {
+                    cell.classList.add('is-today');
+                }
+
+                const num = document.createElement('div');
+                num.className = 'date-num';
+                num.innerText = day;
+                
+                const mark = document.createElement('div');
+                mark.className = 'shift-mark';
+                
+                cell.appendChild(num);
+                cell.appendChild(mark);
+
+                updateCellVisual(cell, getShift(dateStr));
+
+                // 点击事件
+                cell.addEventListener('mousedown', () => handleInteraction(dateStr));
+                // 触摸支持
+                cell.addEventListener('touchstart', (e) => {
+                    e.preventDefault(); // 防止滚动
+                    handleInteraction(dateStr);
+                });
+
+                els.grid.appendChild(cell);
+            }
+        }
+
+        function updateCellVisual(cell, type) {
+            cell.classList.remove('status-day', 'status-night', 'status-off');
+            const mark = cell.querySelector('.shift-mark');
+            
+            if (type !== 'none') {
+                cell.classList.add(`status-${type}`);
+                mark.innerText = type === 'day' ? 'DAY' : (type === 'night' ? 'NGT' : 'OFF');
+            } else {
+                mark.innerText = '';
+            }
+        }
+
+        // --- 统计逻辑 ---
+
+        function updateStats() {
+            const year = STATE.currentDate.getFullYear();
+            const month = STATE.currentDate.getMonth() + 1;
+            const prefix = `${year}-${String(month).padStart(2, '0')}`;
+
+            let counts = { day: 0, night: 0, off: 0 };
+
+            Object.keys(STATE.data).forEach(date => {
+                if (date.startsWith(prefix)) {
+                    const type = STATE.data[date];
+                    if (counts[type] !== undefined) counts[type]++;
+                }
+            });
+
+            // 动画数字更新
+            animateValue(els.stats.day, counts.day);
+            animateValue(els.stats.night, counts.night);
+            animateValue(els.stats.off, counts.off);
+            animateValue(els.stats.total, counts.day + counts.night);
+        }
+
+        function animateValue(element, end) {
+            const start = parseInt(element.innerText);
+            if (start === end) return;
+            
+            gsap.to(element, {
+                innerText: end, 
+                duration: 0.5, 
+                snap: { innerText: 1 },
+                ease: "power1.out"
+            });
+        }
+
+        // --- 功能函数 ---
+
+        function startClock() {
+            setInterval(() => {
+                const now = new Date();
+                els.sysTime.innerText = `SYS_TIME: ${now.toLocaleTimeString('en-GB')}`;
+            }, 1000);
+        }
+
+        function exportJson() {
+            const str = JSON.stringify(STATE.data, null, 2);
+            const blob = new Blob([str], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `shift_data_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+        }
+
+        function importJson(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const newData = JSON.parse(evt.target.result);
+                    if(confirm("Overwrite current data?")) {
+                        STATE.data = newData;
+                        saveData();
+                        renderCalendar();
+                    }
+                } catch(err) {
+                    alert("Invalid JSON");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function clearData() {
+            if (STATE.readonly) {
+                showNotification('Cannot clear data in read-only mode', 'error');
+                return;
+            }
+            
+            if(confirm("FACTORY RESET: DELETE ALL SHIFT DATA?")) {
+                STATE.data = {};
+                saveData();
+                renderCalendar();
+                showNotification('Data cleared', 'success');
+            }
+        }
+
+        function exportImage() {
+            const target = document.getElementById('capture-target');
+            const printHeader = document.getElementById('print-header');
+            const printFooter = document.getElementById('print-footer');
+            const printMonth = document.getElementById('print-month');
+
+            // 临时修改样式以适应截图
+            printHeader.style.display = 'block';
+            printFooter.style.display = 'block';
+            printMonth.innerText = els.monthLabel.innerText;
+            target.style.width = "800px"; // 强制宽度防止变形
+
+            // 临时移除只读遮罩
+            const overlayActive = els.readonlyOverlay.classList.contains('active');
+            if (overlayActive) {
+                els.readonlyOverlay.classList.remove('active');
+            }
+
+            // 添加加载状态
+            const btn = document.getElementById('btnExportImg');
+            const originalText = btn.innerText;
+            btn.innerText = "RENDERING...";
+            
+            html2canvas(target, {
+                scale: 2, // 高清
+                backgroundColor: "#E6E4D8",
+                logging: false
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Schedule_${els.monthLabel.innerText}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            }).finally(() => {
+                // 恢复样式
+                printHeader.style.display = 'none';
+                printFooter.style.display = 'none';
+                target.style.width = "";
+                btn.innerText = originalText;
+                
+                // 恢复只读遮罩
+                if (overlayActive) {
+                    els.readonlyOverlay.classList.add('active');
+                }
+            });
+        }
+
+        // 通知函数
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: ${type === 'warning' ? 'var(--orange)' : type === 'error' ? 'var(--red)' : 'var(--green)'};
+                color: #fff;
+                padding: 15px 30px;
+                font-family: 'Archivo Black', sans-serif;
+                font-size: 1.2rem;
+                z-index: 10000;
+                box-shadow: 0 0 0 5px rgba(0,0,0,0.3);
+                animation: notificationPulse 0.5s ease-out;
+            `;
+            notification.innerText = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'fadeOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 2000);
+        }
+
+        // 添加动画样式
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes notificationPulse {
+                0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+                50% { transform: translate(-50%, -50%) scale(1.1); }
+                100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 启动
+        init();
+
+    </script>
+</body>
+</html>
