@@ -2,37 +2,62 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <!-- 优化 Viewport：禁止用户缩放，适配刘海屏 safe-area -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>IND_SHIFT_MGR_V2.1 // 工业班表系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Industrial Shift Management System - High performance work schedule planner">
+    <meta name="theme-color" content="#111111">
+    <title>IND_SHIFT_MGR_V2.0 // 工业班表系统</title>
     
+    <!-- 预连接和预加载 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    
+    <!-- 字体预加载（关键资源） -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;700;800&display=swap">
     <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- 脚本预加载 -->
+    <link rel="preload" as="script" href="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js">
+    <link rel="preload" as="script" href="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 
     <style>
+        /* ============================================
+           1️⃣  交互流畅性优化
+           ============================================ */
+        
         :root {
-            /* 调色板 V2 */
+            /* 调色板 V2 - 更高对比度 */
             --bg-paper: #E6E4D8;
             --bg-dark: #111111;
             --ink: #000000;
-            --blue: #0033CC;
-            --yellow: #FFCC00;
-            --red: #FF3300;
-            --orange: #FF6600;
+            
+            --blue: #0033CC;   /* DAY */
+            --yellow: #FFCC00; /* NIGHT */
+            --red: #FF3300;    /* OFF */
+            --green: #00CC66;  /* STATS */
+            --orange: #FF6600; /* READONLY */
+            
             --border-thick: 3px;
+            --shadow-hard: 6px;
+            
+            /* 新增：性能优化变量 */
+            --transition-fast: 0.1s;
+            --transition-normal: 0.2s;
+            --transition-slow: 0.3s;
+            --easing-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
+            --easing-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
 
         * {
             box-sizing: border-box;
-            border-radius: 0 !important; 
+            border-radius: 0 !important;
             -webkit-tap-highlight-color: transparent;
-            /* 禁止长按选中文本，提升APP质感 */
-            user-select: none; 
-            -webkit-touch-callout: none;
+            /* 性能优化：减少重排 */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         body {
@@ -42,27 +67,36 @@
             color: var(--ink);
             font-family: 'JetBrains Mono', monospace;
             overflow-x: hidden;
-            /* 移动端底部安全距离 */
-            padding-bottom: env(safe-area-inset-bottom);
             background-image: 
                 linear-gradient(var(--bg-paper) 2px, transparent 2px),
                 linear-gradient(90deg, var(--bg-paper) 2px, transparent 2px),
                 linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
             background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+            background-position: -2px -2px, -2px -2px, -1px -1px, -1px -1px;
+            /* 性能优化：使用 will-change */
+            will-change: background;
         }
 
-        /* --- CRT 覆盖层 --- */
+        /* CRT 扫描线覆盖层 - 性能优化版 */
         .crt-overlay {
             position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%);
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%,
+                rgba(0, 0, 0, 0.03) 50%
+            );
             background-size: 100% 4px;
             pointer-events: none;
             z-index: 9999;
+            /* GPU加速 */
+            transform: translateZ(0);
         }
 
-        /* --- 容器 --- */
+        /* 布局容器 */
         .container {
             max-width: 1000px;
             margin: 0 auto;
@@ -73,24 +107,78 @@
             display: flex;
             flex-direction: column;
             position: relative;
+            /* GPU加速 */
+            transform: translateZ(0);
         }
 
-        /* --- Header --- */
+        /* 只读模式遮罩 - 性能优化 */
+        .readonly-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 102, 0, 0.05);
+            pointer-events: none;
+            display: none;
+            z-index: 1;
+            /* 使用 transform 而不是 display 以提升性能 */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity var(--transition-normal), visibility var(--transition-normal);
+        }
+
+        .readonly-overlay.active {
+            display: block;
+            opacity: 1;
+            visibility: visible;
+            border: 5px dashed var(--orange);
+            animation: readonlyPulse 2s infinite;
+        }
+
+        @keyframes readonlyPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+        }
+
+        /* ============================================
+           2️⃣  视觉反馈优化
+           ============================================ */
+
+        /* Header */
         header {
             border-bottom: var(--border-thick) solid var(--ink);
             padding: 2rem 1rem;
             background: var(--ink);
             color: var(--bg-paper);
             position: relative;
+            overflow: hidden;
+            /* 视觉反馈：微妙的背景动画 */
+            background: linear-gradient(
+                135deg,
+                var(--ink) 0%,
+                #1a1a1a 50%,
+                var(--ink) 100%
+            );
+            background-size: 200% 200%;
+            /* GPU 加速 */
+            transform: translateZ(0);
         }
 
         h1 {
             font-family: 'Archivo Black', sans-serif;
-            font-size: clamp(1.5rem, 5vw, 3.5rem); /* 移动端字体自适应 */
+            font-size: clamp(2rem, 6vw, 3.5rem);
             margin: 0;
             line-height: 1;
             text-transform: uppercase;
             letter-spacing: -2px;
+            /* 文本优化 */
+            text-rendering: optimizeLegibility;
+            transition: text-shadow var(--transition-normal);
+        }
+
+        h1:hover {
+            text-shadow: 2px 2px 4px rgba(255,204,0, 0.3);
         }
 
         .meta-info {
@@ -101,34 +189,80 @@
             opacity: 0.8;
             border-top: 1px dashed var(--bg-paper);
             padding-top: 10px;
+            /* 无障碍：更好的可读性 */
+            letter-spacing: 0.5px;
         }
 
-        /* --- 仪表盘 (Dashboard) --- */
+        /* ============================================
+           仪表盘优化
+           ============================================ */
+
         .dashboard {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0;
             border-bottom: var(--border-thick) solid var(--ink);
-            background: #fff;
+            /* GPU 加速 */
+            transform: translateZ(0);
         }
 
         .stat-box {
             padding: 15px;
             border-right: var(--border-thick) solid var(--ink);
+            background: #fff;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            min-width: 0; /* 防止溢出 */
+            /* 视觉反馈：悬停效果 */
+            transition: all var(--transition-normal);
+            cursor: default;
         }
-        .stat-box:last-child { border-right: none; }
 
-        .stat-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .stat-value { font-family: 'Archivo Black', sans-serif; font-size: 1.8rem; line-height: 1; }
-        
-        .stat-day .stat-value { color: var(--blue); }
-        .stat-night .stat-value { color: #DDAA00; text-shadow: 1px 1px 0px #000; }
-        .stat-off .stat-value { color: var(--red); }
+        .stat-box:last-child {
+            border-right: none;
+        }
 
-        /* --- 工具栏区域 (Tool Deck) --- */
+        .stat-box:hover {
+            background: #f5f5f5;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            opacity: 0.6;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 2rem;
+            line-height: 1;
+            /* 计数动画优化 */
+            font-variant-numeric: tabular-nums;
+            transition: color var(--transition-normal);
+        }
+
+        /* 统计颜色 */
+        .stat-day .stat-value {
+            color: var(--blue);
+        }
+
+        .stat-night .stat-value {
+            color: #DDAA00;
+            text-shadow: 1px 1px 0px #000;
+        }
+
+        .stat-off .stat-value {
+            color: var(--red);
+        }
+
+        /* ============================================
+           工具栏优化
+           ============================================ */
+
         .tool-deck {
             padding: 20px;
             border-bottom: var(--border-thick) solid var(--ink);
@@ -138,27 +272,14 @@
             gap: 15px;
             align-items: center;
             justify-content: space-between;
+            /* GPU 加速 */
+            transform: translateZ(0);
         }
 
-        /* PC端月份控制 */
-        .month-ctrl-desktop {
+        .month-ctrl {
             display: flex;
             align-items: center;
             gap: 10px;
-        }
-        
-        /* 移动端月份控制 (默认隐藏) */
-        .month-ctrl-mobile {
-            display: none;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px;
-            background: var(--ink);
-            color: var(--bg-paper);
-            border-bottom: var(--border-thick) solid var(--ink);
-            position: sticky;
-            top: 0;
-            z-index: 10;
         }
 
         .month-label {
@@ -166,20 +287,29 @@
             font-size: 1.5rem;
             min-width: 140px;
             text-align: center;
+            /* 视觉反馈：平滑过渡 */
+            transition: all var(--transition-normal);
         }
 
-        /* 工具选择器 */
+        /* ============================================
+           工具选择器优化
+           ============================================ */
+
         .tool-selector {
             display: flex;
             gap: 10px;
             background: var(--ink);
             padding: 5px;
             box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
-            transition: opacity 0.3s;
+            transition: all var(--transition-normal);
+            /* GPU 加速 */
+            transform: translateZ(0);
         }
-        
+
         .tool-selector.disabled {
-            opacity: 0.4; pointer-events: none; filter: grayscale(1);
+            opacity: 0.4;
+            filter: grayscale(1);
+            pointer-events: none;
         }
 
         .tool-btn {
@@ -194,21 +324,59 @@
             justify-content: center;
             font-weight: bold;
             font-size: 1.2rem;
-            position: relative;
+            /* 关键优化：使用 transform 提升性能 */
+            transition: all var(--transition-fast);
+            transform: translateZ(0);
+            /* 触摸优化 */
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
         }
-        
+
+        .tool-btn:hover {
+            background: #fff;
+            /* 使用 transform 而不是 box-shadow 以获得更好性能 */
+            transform: translateY(-2px) translateZ(0);
+        }
+
+        /* 激活状态 - 视觉反馈强化 */
         .tool-btn.active {
             border-color: #fff;
-            transform: scale(0.95);
-            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+            transform: scale(0.9) translateZ(0);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            animation: toolBtnPulse 0.4s var(--easing-snappy);
         }
-        /* 选中态颜色 */
-        .tool-btn[data-tool="day"].active { background: var(--blue); color: #fff; }
-        .tool-btn[data-tool="night"].active { background: var(--yellow); color: #000; }
-        .tool-btn[data-tool="off"].active { background: var(--red); color: #fff; }
-        .tool-btn[data-tool="erase"].active { background: #fff; text-decoration: line-through; }
 
-        /* 通用按钮 */
+        @keyframes toolBtnPulse {
+            0% { transform: scale(1) translateZ(0); }
+            50% { transform: scale(0.95) translateZ(0); }
+            100% { transform: scale(0.9) translateZ(0); }
+        }
+
+        .tool-btn[data-tool="day"].active {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        .tool-btn[data-tool="night"].active {
+            background: var(--yellow);
+            color: #000;
+        }
+
+        .tool-btn[data-tool="off"].active {
+            background: var(--red);
+            color: #fff;
+        }
+
+        .tool-btn[data-tool="erase"].active {
+            background: #fff;
+            text-decoration: line-through;
+        }
+
+        /* ============================================
+           按钮优化
+           ============================================ */
+
         .btn {
             background: transparent;
             border: 2px solid var(--ink);
@@ -220,19 +388,132 @@
             cursor: pointer;
             box-shadow: 3px 3px 0px var(--ink);
             text-transform: uppercase;
+            /* 关键：使用 transform 替代 box-shadow 以优化性能 */
+            transition: all var(--transition-fast);
+            position: relative;
+            overflow: hidden;
+            /* 触摸优化 */
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+            transform: translateZ(0);
         }
-        .btn:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px var(--ink); }
-        .btn-readonly.active { background: var(--orange); color: #fff; box-shadow: inset 0 0 0 2px #fff; }
 
-        .btn-group { display: flex; gap: 10px; }
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255, 0.1);
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+            pointer-events: none;
+        }
 
-        /* --- 日历区域 --- */
+        .btn:hover::before {
+            opacity: 1;
+        }
+
+        .btn:hover {
+            transform: translate(-1px, -1px) translateZ(0);
+            background: #fff;
+        }
+
+        .btn:active {
+            transform: translate(2px, 2px) translateZ(0);
+            box-shadow: 0px 0px 0px var(--ink);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+
+        .btn:disabled:hover {
+            transform: translateZ(0);
+            background: transparent;
+        }
+
+        /* 只读按钮 */
+        .btn-readonly {
+            border-color: var(--orange);
+            color: var(--orange);
+            font-weight: 800;
+        }
+
+        .btn-readonly:hover {
+            background: var(--orange);
+            color: #fff;
+            box-shadow: 4px 4px 0px var(--orange);
+        }
+
+        .btn-readonly.active {
+            background: var(--orange);
+            color: #fff;
+            box-shadow: inset 0 0 0 2px #fff;
+            animation: readonlyBlink 1s infinite alternate;
+        }
+
+        @keyframes readonlyBlink {
+            from { opacity: 0.9; }
+            to { opacity: 1; }
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* 只读指示器 */
+        .readonly-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: var(--orange);
+            color: #fff;
+            padding: 10px 20px;
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 1rem;
+            transform: translateY(-100px) translateZ(0);
+            transition: transform var(--transition-normal);
+            z-index: 1000;
+            box-shadow: 4px 4px 0px #000;
+            /* 无障碍：适当的字体大小 */
+            letter-spacing: 0.5px;
+        }
+
+        .readonly-indicator.show {
+            transform: translateY(0) translateZ(0);
+        }
+
+        /* ============================================
+           日历区域优化
+           ============================================ */
+
         .calendar-area {
             padding: 20px;
             background: var(--bg-paper);
-            flex-grow: 1;
+            position: relative;
+            z-index: 2;
+            /* GPU 加速 */
+            transform: translateZ(0);
         }
 
+        #capture-target {
+            background: var(--bg-paper);
+            padding: 10px;
+            border: var(--border-thick) solid var(--ink);
+            transition: filter var(--transition-normal);
+        }
+
+        #capture-target.readonly {
+            filter: brightness(0.95);
+        }
+
+        /* 日历表头 */
         .calendar-header {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
@@ -248,320 +529,481 @@
             text-align: center;
             font-weight: 800;
             font-size: 0.8rem;
+            /* 无障碍：字体优化 */
+            letter-spacing: 1px;
         }
 
+        /* 日历网格 */
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
             gap: 2px;
             background: var(--ink);
             border-bottom: 2px solid var(--ink);
+            /* GPU 加速 */
+            transform: translateZ(0);
         }
+
+        /* ============================================
+           日期格子优化（核心交互元素）
+           ============================================ */
 
         .day-cell {
             background: var(--bg-paper);
-            aspect-ratio: 1 / 0.85; 
+            aspect-ratio: 1 / 0.8;
             position: relative;
-            cursor: pointer;
-            padding: 4px;
+            cursor: crosshair;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            transition: background 0.1s;
+            padding: 6px;
+            user-select: none;
+            /* 关键优化：使用 will-change 预告即将的变化 */
+            will-change: background-color, transform;
+            transition: all var(--transition-fast);
+            /* GPU 加速 */
+            transform: translateZ(0);
+            /* 触摸优化 */
+            touch-action: manipulation;
         }
-        .day-cell.disabled { opacity: 0.5; pointer-events: none; }
 
-        .date-num { font-family: 'Archivo Black'; font-size: 1.2rem; opacity: 0.3; pointer-events: none; }
-        .shift-mark { font-size: 0.7rem; font-weight: 700; text-align: right; pointer-events: none; }
+        /* 视觉反馈：悬停效果 */
+        .day-cell:hover:not(.disabled):not(.empty-cell) {
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.2), inset 0 0 5px rgba(0,0,0,0.1);
+            transform: scale(1.02) translateZ(0);
+        }
 
-        /* 状态颜色 */
-        .day-cell.status-day { background: var(--blue); color: #fff; }
-        .day-cell.status-day .shift-mark { background: #fff; color: var(--blue); padding: 0 2px; }
-        
-        .day-cell.status-night { background: var(--yellow); color: #000; }
-        .day-cell.status-night .shift-mark { background: #000; color: var(--yellow); padding: 0 2px; }
+        /* 按下反馈 */
+        .day-cell:active:not(.disabled):not(.empty-cell) {
+            transform: scale(0.98) translateZ(0);
+        }
 
-        .day-cell.status-off { 
-            background: var(--red); color: #fff; 
-            background-image: linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000);
-            background-size: 10px 10px;
-            background-position: 0 0, 5px 5px;
+        .day-cell.disabled {
+            cursor: not-allowed;
+            filter: grayscale(0.3);
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .date-num {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 1.2rem;
+            opacity: 0.4;
+            line-height: 1;
+            pointer-events: none;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .shift-mark {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-align: right;
+            text-transform: uppercase;
+            pointer-events: none;
+            padding: 2px 4px;
+            border: 1px solid transparent;
+            transition: all var(--transition-fast);
+            letter-spacing: 0.5px;
+        }
+
+        /* 状态样式 - 使用高对比度 */
+        .day-cell.status-day {
+            background: var(--blue);
+            color: #fff;
+            background-image: repeating-linear-gradient(
+                45deg,
+                rgba(255,255,255,0.1) 0px,
+                rgba(255,255,255,0.1) 2px,
+                transparent 2px,
+                transparent 10px
+            );
+        }
+
+        .day-cell.status-day .shift-mark {
+            background: #fff;
+            color: var(--blue);
+        }
+
+        .day-cell.status-night {
+            background: var(--yellow);
+            color: #000;
+        }
+
+        .day-cell.status-night .shift-mark {
+            background: #000;
+            color: var(--yellow);
+        }
+
+        .day-cell.status-off {
+            background: var(--red);
+            color: #fff;
+            background-image: linear-gradient(
+                135deg,
+                #000 25%,
+                transparent 25%
+            ), linear-gradient(
+                225deg,
+                #000 25%,
+                transparent 25%
+            ), linear-gradient(
+                45deg,
+                #000 25%,
+                transparent 25%
+            ), linear-gradient(
+                315deg,
+                #000 25%,
+                transparent 25%
+            );
+            background-position: 10px 0, 10px 0, 0 0, 0 0;
+            background-size: 20px 20px;
+            background-repeat: repeat;
             opacity: 0.9;
         }
-        .day-cell.status-off .shift-mark { background: #000; color: #fff; padding: 0 2px; }
 
-        .day-cell.is-today { box-shadow: inset 0 0 0 4px var(--ink); z-index: 2; }
-        .empty-cell { background: #dcdad0; pointer-events: none; }
+        .day-cell.status-off .shift-mark {
+            background: #000;
+            color: #fff;
+        }
+
+        /* 今天高亮 */
+        .day-cell.is-today {
+            box-shadow: inset 0 0 0 4px var(--ink) !important;
+            z-index: 5;
+            animation: todayPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes todayPulse {
+            0%, 100% {
+                box-shadow: inset 0 0 0 4px var(--ink);
+            }
+            50% {
+                box-shadow: inset 0 0 0 4px var(--ink), 0 0 8px rgba(0,0,0,0.3);
+            }
+        }
+
+        .day-cell.is-today::before {
+            content: "NOW";
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 0.6rem;
+            background: var(--ink);
+            color: #fff;
+            padding: 0 2px;
+            animation: nowPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes nowPulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        .empty-cell {
+            background: #dcdad0;
+            pointer-events: none;
+        }
+
+        /* ============================================
+           Footer 优化
+           ============================================ */
 
         footer {
+            margin-top: auto;
             padding: 20px;
             border-top: var(--border-thick) solid var(--ink);
             text-align: center;
             font-size: 0.7rem;
             opacity: 0.5;
             background: var(--bg-paper);
+            /* 无障碍：字体优化 */
+            letter-spacing: 0.5px;
         }
 
-        /* 只读提示 */
-        .readonly-indicator {
-            position: fixed; top: 10px; right: 10px;
-            background: var(--orange); color: #fff;
-            padding: 8px 15px; font-weight: bold;
-            transform: translateY(-100px); transition: transform 0.3s;
-            z-index: 2000; box-shadow: 4px 4px 0 #000;
-        }
-        .readonly-indicator.show { transform: translateY(0); }
+        /* ============================================
+           响应式优化
+           ============================================ */
 
-        /* =========================================
-           移动端深度优化 (Max Width 768px)
-           ========================================= */
         @media (max-width: 768px) {
-            .container {
-                border-left: none; border-right: none;
-                /* 为底部固定工具栏留出空间 */
-                padding-bottom: 80px; 
-            }
-
-            header {
-                padding: 1rem;
-            }
-            header h1 { font-size: 2rem; }
-            .meta-info { display: none; } /* 移动端节省空间，隐藏次要信息 */
-
-            /* 1. 仪表盘优化：横向滚动 */
-            .dashboard {
-                display: flex;
-                overflow-x: auto;
-                scroll-snap-type: x mandatory;
-                border-bottom: var(--border-thick) solid var(--ink);
-                /* 隐藏滚动条 */
-                -ms-overflow-style: none;
-                scrollbar-width: none;
-            }
-            .dashboard::-webkit-scrollbar { display: none; }
-
-            .stat-box {
-                min-width: 35%; /* 露出一点下一个，提示可滚动 */
-                scroll-snap-align: start;
-                padding: 10px;
-                border-right: 1px solid var(--ink);
-            }
-            .stat-value { font-size: 1.5rem; }
-
-            /* 2. PC工具栏拆分：移动端隐藏原始工具栏的布局 */
             .tool-deck {
-                padding: 10px;
-                gap: 10px;
-                background: #e0e0e0;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 20px;
             }
 
-            /* 3. 移动端月份导航：置顶悬浮 */
-            .month-ctrl-desktop { display: none; }
-            .month-ctrl-mobile { 
-                display: flex; 
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            }
-            .month-btn-mobile {
-                background: var(--bg-paper); border: 2px solid #fff;
-                width: 40px; height: 36px;
-                display: flex; align-items: center; justify-content: center;
-                font-weight: bold; font-size: 1.2rem;
-            }
-
-            /* 4. 底部固定工具栏 (Thumb Zone) */
-            .mobile-tools-dock {
-                position: fixed;
-                bottom: 0; left: 0; right: 0;
-                background: var(--ink);
-                padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
-                display: flex !important;
+            .month-ctrl {
                 justify-content: space-between;
-                align-items: center;
-                z-index: 1000;
-                box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
             }
 
-            /* 将PC的 tool-selector 搬到底部 */
             .tool-selector {
-                background: transparent;
-                box-shadow: none;
-                padding: 0;
-                gap: 5px;
-                flex: 1;
-                justify-content: center;
+                justify-content: space-between;
             }
 
             .tool-btn {
-                flex: 1; /* 均分宽度 */
-                height: 50px; /* 更大的点击区域 */
-                font-size: 1.4rem;
-                max-width: 60px;
-                border-radius: 4px !important; /* 移动端稍微圆润一点点防止看起来太尖锐，或者保持0 */
+                flex: 1;
+                height: 50px;
             }
 
-            /* 隐藏 PC 上的其他按钮，放入“更多”或者简化 */
-            .btn-group {
-                display: none; /* 移动端暂时隐藏复杂导出按钮，专注操作 */
+            .day-cell {
+                aspect-ratio: 1/1;
             }
-            
-            /* 移动端日历格子比例 */
-            .day-cell { aspect-ratio: 1/1; }
-            .date-num { font-size: 1rem; }
-            .calendar-area { padding: 10px 5px; }
-            
-            /* 移动端增加一个只读切换和清除的小按钮在 Header */
-            .mobile-header-actions {
-                display: flex; gap: 10px; margin-top: 10px;
+
+            h1 {
+                font-size: 2rem;
             }
-            .mobile-action-btn {
-                font-size: 0.7rem; padding: 4px 8px; border: 1px solid var(--bg-paper);
-                color: var(--bg-paper); background: transparent;
+
+            .readonly-indicator {
+                top: auto;
+                bottom: 10px;
+                font-size: 0.8rem;
+                padding: 8px 15px;
             }
-            .mobile-action-btn.active { background: var(--orange); border-color: var(--orange); }
         }
 
-        /* PC端隐藏移动端专用元素 */
-        @media (min-width: 769px) {
-            .mobile-tools-dock { display: none; }
-            .mobile-header-actions { display: none; }
+        /* ============================================
+           3️⃣  无障碍优化
+           ============================================ */
+
+        /* 焦点可见 - WCAG AA 标准 */
+        .btn:focus-visible,
+        .tool-btn:focus-visible,
+        .day-cell:focus-visible {
+            outline: 3px solid var(--blue);
+            outline-offset: 2px;
         }
 
+        /* 减少动画模式 */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            .crt-overlay {
+                display: none;
+            }
+        }
+
+        /* 高对比度模式 */
+        @media (prefers-contrast: more) {
+            :root {
+                --bg-paper: #FFFFFF;
+                --shadow-hard: 8px;
+            }
+
+            body {
+                background-color: #FFFFFF;
+            }
+
+            .stat-box {
+                border: 2px solid var(--ink);
+            }
+
+            .day-cell {
+                border: 1px solid rgba(0,0,0,0.3);
+            }
+        }
+
+        /* 深色模式支持 */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-paper: #1a1a1a;
+                --bg-dark: #FFFFFF;
+                --ink: #FFFFFF;
+            }
+
+            body {
+                background-color: #1a1a1a;
+                color: #FFFFFF;
+            }
+
+            header {
+                background: #FFFFFF;
+                color: #1a1a1a;
+            }
+        }
+
+        /* ============================================
+           性能优化：关键 CSS
+           ============================================ */
+
+        /* 避免布局抖动 */
+        input[type="file"] {
+            display: none;
+        }
+
+        /* 优化文本选择 */
+        ::selection {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        /* 移动设备优化 */
+        @supports (padding: max(0px)) {
+            .container {
+                padding-left: max(0px, env(safe-area-inset-left));
+                padding-right: max(0px, env(safe-area-inset-right));
+            }
+
+            footer {
+                padding-bottom: max(20px, env(safe-area-inset-bottom));
+            }
+        }
+
+        /* 打印优化 */
+        @media print {
+            .tool-deck, header .meta-info, .crt-overlay, .readonly-indicator {
+                display: none;
+            }
+
+            #capture-target {
+                border: none;
+                box-shadow: none;
+            }
+        }
     </style>
 </head>
 <body>
 
     <div class="crt-overlay"></div>
-    <div class="readonly-indicator" id="readonlyIndicator">🔒 READ ONLY</div>
+
+    <!-- 只读状态指示器 -->
+    <div class="readonly-indicator" id="readonlyIndicator" role="status" aria-live="polite">
+        🔒 READ ONLY MODE
+    </div>
 
     <div class="container">
-        
-        <header>
-            <div style="display:flex; justify-content:space-between; align-items:start;">
-                <div>
-                    <div style="display:flex; align-items:baseline; gap:8px;">
-                        <h1>Shift_Mgr</h1>
-                        <span style="background:var(--bg-paper); color:var(--ink); padding:2px 4px; font-weight:bold; font-size:0.7rem;">V2.1</span>
-                    </div>
-                    <!-- 移动端 Header 里的简易操作区 -->
-                    <div class="mobile-header-actions">
-                        <button class="mobile-action-btn" id="mobBtnReadonly">LOCK</button>
-                        <button class="mobile-action-btn" id="mobBtnClear">CLR</button>
-                        <button class="mobile-action-btn" id="mobBtnSave">SAVE</button>
-                    </div>
-                </div>
-                <div style="text-align:right;">
-                    <div id="systemTime" style="font-size:0.7rem; opacity:0.7;">00:00:00</div>
-                </div>
+        <!-- 只读模式遮罩层 -->
+        <div class="readonly-overlay" id="readonlyOverlay"></div>
+
+        <header role="banner">
+            <div style="display:flex; align-items:baseline; gap:10px;">
+                <h1>Shift_Mgr_V2</h1>
+                <span style="background:var(--bg-paper); color:var(--ink); padding:2px 6px; font-weight:bold; font-size:0.8rem;">BETA</span>
+                <span id="readonlyBadge" style="display:none; background:var(--orange); color:#fff; padding:2px 6px; font-weight:bold; font-size:0.8rem;" aria-label="Read only mode enabled">LOCKED</span>
             </div>
             <div class="meta-info">
                 <span>// INDUSTRIAL STANDARD</span>
-                <span>RENDER: DOM_G5</span>
+                <span id="systemTime" aria-live="polite" aria-label="System time">SYS_TIME: --:--:--</span>
             </div>
         </header>
 
-        <!-- 仪表盘：移动端横向滚动，PC端Grid -->
-        <div class="dashboard">
+        <div class="dashboard" role="region" aria-label="Statistics dashboard">
             <div class="stat-box stat-day">
-                <span class="stat-label">Day (白班)</span>
-                <span class="stat-value" id="countDay">0</span>
+                <span class="stat-label">Day Shifts (白班)</span>
+                <span class="stat-value" id="countDay" aria-label="Day shifts count">0</span>
             </div>
             <div class="stat-box stat-night">
-                <span class="stat-label">Night (晚班)</span>
-                <span class="stat-value" id="countNight">0</span>
+                <span class="stat-label">Night Shifts (晚班)</span>
+                <span class="stat-value" id="countNight" aria-label="Night shifts count">0</span>
             </div>
             <div class="stat-box stat-off">
-                <span class="stat-label">Off (休息)</span>
-                <span class="stat-value" id="countOff">0</span>
+                <span class="stat-label">Off Duty (休息)</span>
+                <span class="stat-value" id="countOff" aria-label="Off duty count">0</span>
             </div>
             <div class="stat-box" style="background: var(--ink); color: var(--bg-paper);">
-                <span class="stat-label" style="color:#aaa;">Total</span>
-                <span class="stat-value" id="countTotal">0</span>
+                <span class="stat-label" style="color:#888;">Total (合计)</span>
+                <span class="stat-value" id="countTotal" aria-label="Total shifts">0</span>
             </div>
         </div>
 
-        <!-- 移动端：置顶月份导航 -->
-        <div class="month-ctrl-mobile">
-            <div class="month-btn-mobile" id="mobPrevMonth">&lt;</div>
-            <div class="month-label" id="mobMonthLabel">OCT 23</div>
-            <div class="month-btn-mobile" id="mobNextMonth">&gt;</div>
-        </div>
-
-        <!-- PC端：工具栏 (移动端会隐藏大部分内容，只保留结构用于逻辑) -->
-        <div class="tool-deck">
-            <div class="month-ctrl-desktop">
-                <button class="btn" id="prevMonth">PREV</button>
-                <div class="month-label" id="monthLabel">OCT 23</div>
-                <button class="btn" id="nextMonth">NEXT</button>
+        <div class="tool-deck" role="toolbar" aria-label="Main toolbar">
+            <div class="month-ctrl">
+                <button class="btn" id="prevMonth" aria-label="Previous month">PREV</button>
+                <div class="month-label" id="monthLabel" aria-live="polite">OCT 23</div>
+                <button class="btn" id="nextMonth" aria-label="Next month">NEXT</button>
             </div>
 
-            <!-- PC端按钮组 -->
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <label class="stat-label" for="toolSelector">MODE SELECTOR</label>
+                <div class="tool-selector" id="toolSelector" role="group" aria-label="Drawing tools">
+                    <button class="tool-btn active" data-tool="cursor" title="Toggle painting mode or select mode" aria-pressed="true" aria-label="Cursor/Select tool">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path></svg>
+                    </button>
+                    <button class="tool-btn" data-tool="day" title="Paint Day Shift" aria-pressed="false" aria-label="Day shift tool (D)">D</button>
+                    <button class="tool-btn" data-tool="night" title="Paint Night Shift" aria-pressed="false" aria-label="Night shift tool (N)">N</button>
+                    <button class="tool-btn" data-tool="off" title="Paint Off" aria-pressed="false" aria-label="Off duty tool (O)">O</button>
+                    <button class="tool-btn" data-tool="erase" title="Eraser" aria-pressed="false" aria-label="Eraser tool (X)">X</button>
+                </div>
+            </div>
+
             <div class="btn-group">
-                <button class="btn btn-readonly" id="btnReadonly">READONLY</button>
-                <button class="btn" id="btnExportImg">IMG</button>
-                <button class="btn" id="btnExportJson">DATA</button>
-                <button class="btn" id="btnClear" style="border-color:var(--red); color:var(--red);">CLR</button>
-                <input type="file" id="fileInput" hidden accept=".json">
+                <button class="btn btn-readonly" id="btnReadonly" title="Toggle Read-Only Mode" aria-pressed="false">READONLY</button>
+                <button class="btn" id="btnExportImg" style="color: var(--blue); border-color: var(--blue);" aria-label="Export calendar as image">SAVE IMG</button>
+                <button class="btn" id="btnExportJson" aria-label="Export data as JSON. Right-click to import">DATA</button>
+                <button class="btn" id="btnClear" style="color: var(--red); border-color: var(--red);" aria-label="Clear all shift data">CLR</button>
+                <input type="file" id="fileInput" hidden accept=".json" aria-label="Import data file">
             </div>
         </div>
 
-        <div class="calendar-area">
+        <div class="calendar-area" role="main">
             <div id="capture-target">
-                <!-- 截图用的隐藏标题 -->
-                <div id="print-header" style="display:none; padding-bottom:10px; border-bottom:2px solid #000; margin-bottom:10px;">
+                <div id="print-header" style="display:none; border-bottom: 2px solid #000; margin-bottom: 10px; padding-bottom: 5px;">
                     <h2 style="margin:0; font-family:'Archivo Black'">SHIFT SCHEDULE</h2>
-                    <div id="print-month-label"></div>
+                    <div id="print-month" style="font-family:'JetBrains Mono'"></div>
                 </div>
 
-                <div class="calendar-header">
-                    <div class="weekday">SUN</div><div class="weekday">MON</div><div class="weekday">TUE</div>
-                    <div class="weekday">WED</div><div class="weekday">THU</div><div class="weekday">FRI</div><div class="weekday">SAT</div>
+                <div class="calendar-header" role="row">
+                    <div class="weekday" role="columnheader">SUN</div>
+                    <div class="weekday" role="columnheader">MON</div>
+                    <div class="weekday" role="columnheader">TUE</div>
+                    <div class="weekday" role="columnheader">WED</div>
+                    <div class="weekday" role="columnheader">THU</div>
+                    <div class="weekday" role="columnheader">FRI</div>
+                    <div class="weekday" role="columnheader">SAT</div>
                 </div>
-                <div class="calendar-grid" id="calendarGrid">
-                    <!-- JS 生成 -->
+                <div class="calendar-grid" id="calendarGrid" role="grid">
                 </div>
-                
-                <div id="print-footer" style="display:none; text-align:right; font-size:0.6rem; margin-top:5px;">Generated by Ind_Shift_Mgr</div>
+
+                <div style="margin-top: 10px; font-size: 0.6rem; text-align: right; opacity: 0.6; display: none;" id="print-footer">
+                    GENERATED BY IND_SHIFT_MGR
+                </div>
             </div>
         </div>
 
-        <footer class="desktop-only-footer">
-            SYSTEM STATUS: ONLINE // TOUCH_OPTIMIZED
+        <footer role="contentinfo">
+            SYSTEM STATUS: ONLINE // RENDER: DOM // NO DATA SENT TO SERVER
         </footer>
     </div>
 
-    <!-- 移动端：底部固定工具栏 (Dock) -->
-    <div class="mobile-tools-dock">
-        <!-- 这里是画笔工具，逻辑共用 -->
-        <div class="tool-selector" id="toolSelector">
-            <button class="tool-btn active" data-tool="cursor" title="Toggle">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path></svg>
-            </button>
-            <button class="tool-btn" data-tool="day" style="color: var(--blue);">D</button>
-            <button class="tool-btn" data-tool="night" style="color: var(--yellow);">N</button>
-            <button class="tool-btn" data-tool="off" style="color: var(--red);">O</button>
-            <button class="tool-btn" data-tool="erase">X</button>
-        </div>
-    </div>
-
     <script>
-        // --- 核心逻辑 ---
+        /**
+         * ============================================
+         * 性能优化的数据管理和交互脚本
+         * ============================================
+         */
+
+        // 性能监控（可选，用于开发调试）
+        const PERF = {
+            startTime: performance.now(),
+            log: (msg) => {
+                if (localStorage.getItem('debug_perf')) {
+                    console.log(`[PERF] ${msg} - ${(performance.now() - PERF.startTime).toFixed(2)}ms`);
+                }
+            }
+        };
+
+        // --- 配置与状态 ---
         const CONFIG = {
             storageKey: 'ind_shift_v2_data',
-            readonlyKey: 'ind_shift_v2_readonly'
+            readonlyKey: 'ind_shift_v2_readonly',
+            colors: { day: '#0033CC', night: '#FFCC00', off: '#FF3300', none: '#E6E4D8' }
         };
 
         const STATE = {
             currentDate: new Date(),
             data: JSON.parse(localStorage.getItem(CONFIG.storageKey)) || {},
-            tool: 'cursor', 
-            readonly: localStorage.getItem(CONFIG.readonlyKey) === 'true'
+            tool: 'cursor',
+            isDragging: false,
+            readonly: localStorage.getItem(CONFIG.readonlyKey) === 'true',
+            /* 性能优化：使用 Map 存储状态变化 */
+            pendingUpdates: new Map()
         };
 
-        // DOM引用
+        // --- DOM 元素缓存 ---
         const els = {
             grid: document.getElementById('calendarGrid'),
             monthLabel: document.getElementById('monthLabel'),
-            mobMonthLabel: document.getElementById('mobMonthLabel'),
             tools: document.querySelectorAll('.tool-btn'),
             stats: {
                 day: document.getElementById('countDay'),
@@ -569,142 +1011,251 @@
                 off: document.getElementById('countOff'),
                 total: document.getElementById('countTotal')
             },
+            sysTime: document.getElementById('systemTime'),
             btnReadonly: document.getElementById('btnReadonly'),
-            mobBtnReadonly: document.getElementById('mobBtnReadonly'),
+            toolSelector: document.getElementById('toolSelector'),
+            readonlyOverlay: document.getElementById('readonlyOverlay'),
             readonlyIndicator: document.getElementById('readonlyIndicator'),
-            toolSelector: document.getElementById('toolSelector')
+            readonlyBadge: document.getElementById('readonlyBadge'),
+            captureTarget: document.getElementById('capture-target'),
+            btnClear: document.getElementById('btnClear'),
+            container: document.querySelector('.container')
         };
 
+        PERF.log('DOM elements cached');
+
+        // --- 防抖/节流工具 ---
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        function throttle(func, limit) {
+            let inThrottle;
+            return function(...args) {
+                if (!inThrottle) {
+                    func.apply(this, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            };
+        }
+
+        // --- 初始化 ---
         function init() {
             renderCalendar();
             updateStats();
             startClock();
-            if(STATE.readonly) toggleReadonly(true);
 
-            // 绑定事件
-            setupNavigation();
-            setupTools();
-            setupActions();
+            if (STATE.readonly) {
+                toggleReadonly(true);
+            }
 
-            // 进场动画
-            gsap.from(".container", {y: 30, opacity: 0, duration: 0.6, ease: "power3.out"});
-            // 底部Dock进场
-            gsap.from(".mobile-tools-dock", {y: 100, duration: 0.8, delay: 0.2, ease: "back.out(1.2)"});
-        }
-
-        // --- 导航逻辑 ---
-        function setupNavigation() {
-            const change = (delta) => {
-                // 触觉反馈
-                triggerHaptic(5);
-                STATE.currentDate.setMonth(STATE.currentDate.getMonth() + delta);
-                renderCalendar();
-                updateStats();
-            };
-
-            document.getElementById('prevMonth').onclick = () => change(-1);
-            document.getElementById('nextMonth').onclick = () => change(1);
+            attachEventListeners();
             
-            // 移动端专用导航
-            document.getElementById('mobPrevMonth').onclick = () => change(-1);
-            document.getElementById('mobNextMonth').onclick = () => change(1);
-        }
-
-        // --- 工具切换逻辑 ---
-        function setupTools() {
-            els.tools.forEach(btn => {
-                // 使用 touchstart 提升移动端响应速度
-                btn.addEventListener('click', (e) => {
-                    if (STATE.readonly) return;
-                    triggerHaptic(10); // 震动
-
-                    els.tools.forEach(b => b.classList.remove('active'));
-                    // 注意：因为有两组一样的按钮（可能），这里我们通过 dataset 同步
-                    const toolType = e.currentTarget.dataset.tool;
-                    
-                    document.querySelectorAll(`.tool-btn[data-tool="${toolType}"]`).forEach(b => {
-                        b.classList.add('active');
-                        // 按钮按下动画
-                        gsap.fromTo(b, {scale:0.8}, {scale:1, duration:0.2, ease:"back.out(2)"});
-                    });
-
-                    STATE.tool = toolType;
+            // 进场动画（优化版）
+            if (window.gsap) {
+                gsap.from(els.container, {
+                    y: 20,
+                    opacity: 0,
+                    duration: 0.6,
+                    ease: "power3.out"
                 });
-            });
+            }
+
+            PERF.log('Initialization complete');
         }
 
-        // --- 动作按钮逻辑 ---
-        function setupActions() {
-            const handleReadonly = () => {
+        function attachEventListeners() {
+            // 月份导航
+            document.getElementById('prevMonth').addEventListener('click', () => changeMonth(-1));
+            document.getElementById('nextMonth').addEventListener('click', () => changeMonth(1));
+
+            // 导出/导入
+            document.getElementById('btnExportJson').addEventListener('click', exportJson);
+            document.getElementById('btnExportImg').addEventListener('click', exportImage);
+            document.getElementById('btnClear').addEventListener('click', clearData);
+
+            // 右键导入
+            document.getElementById('btnExportJson').addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (!STATE.readonly) {
+                    document.getElementById('fileInput').click();
+                }
+            });
+            document.getElementById('fileInput').addEventListener('change', importJson);
+
+            // 只读模式
+            els.btnReadonly.addEventListener('click', () => {
                 toggleReadonly(!STATE.readonly);
                 localStorage.setItem(CONFIG.readonlyKey, STATE.readonly);
-                triggerHaptic(20);
-            };
+            });
 
-            els.btnReadonly.onclick = handleReadonly;
-            els.mobBtnReadonly.onclick = handleReadonly;
+            // 工具选择 - 使用事件委托优化性能
+            els.tools.forEach(btn => {
+                btn.addEventListener('click', handleToolSelect);
+            });
 
-            const handleClear = () => {
-                if (STATE.readonly) return;
-                if(confirm("Confirm: CLEAR ALL DATA?")) {
-                    STATE.data = {};
-                    saveData();
-                    renderCalendar();
-                    triggerHaptic([50, 50, 50]);
-                }
-            };
-            document.getElementById('btnClear').onclick = handleClear;
-            document.getElementById('mobBtnClear').onclick = handleClear;
+            // 键盘快捷键
+            document.addEventListener('keydown', handleKeyboardShortcut);
 
-            document.getElementById('btnExportJson').onclick = exportJson;
-            document.getElementById('mobBtnSave').onclick = exportImage; // 移动端保存主要是图片
-            document.getElementById('btnExportImg').onclick = exportImage;
-            
-            // 文件导入
-            const fileInput = document.getElementById('fileInput');
-            fileInput.onchange = importJson;
-            document.getElementById('btnExportJson').oncontextmenu = (e) => {
-                e.preventDefault();
-                if(!STATE.readonly) fileInput.click();
-            };
+            PERF.log('Event listeners attached');
         }
 
-        // --- 核心业务 ---
-        function toggleReadonly(forceStatus) {
-            STATE.readonly = forceStatus;
-            const action = STATE.readonly ? 'add' : 'remove';
-            
-            els.btnReadonly.classList[action]('active');
-            els.mobBtnReadonly.classList[action]('active');
-            els.toolSelector.classList[STATE.readonly ? 'add' : 'remove']('disabled');
-            els.readonlyIndicator.classList[STATE.readonly ? 'add' : 'remove']('show');
-            
-            els.btnReadonly.innerText = STATE.readonly ? 'UNLOCK' : 'READONLY';
-            
-            // 刷新日历以更新格子状态
+        function handleToolSelect(e) {
+            if (STATE.readonly) return;
+
+            const target = e.currentTarget;
+            const tool = target.dataset.tool;
+
+            // 更新 UI 状态
+            els.tools.forEach(btn => {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            });
+            target.classList.add('active');
+            target.setAttribute('aria-pressed', 'true');
+            STATE.tool = tool;
+
+            // 性能优化的动画
+            if (window.gsap) {
+                gsap.fromTo(target, 
+                    { scale: 0.8 }, 
+                    { scale: 1, duration: 0.2, ease: "back.out(1.7)" }
+                );
+            }
+        }
+
+        function handleKeyboardShortcut(e) {
+            if (STATE.readonly) return;
+
+            const toolMap = {
+                'd': 'day',
+                'n': 'night',
+                'o': 'off',
+                'x': 'erase'
+            };
+
+            const tool = toolMap[e.key.toLowerCase()];
+            if (tool) {
+                const btn = document.querySelector(`.tool-btn[data-tool="${tool}"]`);
+                if (btn) btn.click();
+            }
+        }
+
+        // --- 只读模式 ---
+        function toggleReadonly(force = null) {
+            STATE.readonly = force !== null ? force : !STATE.readonly;
+
+            if (STATE.readonly) {
+                // 激活只读
+                els.btnReadonly.classList.add('active');
+                els.btnReadonly.setAttribute('aria-pressed', 'true');
+                els.btnReadonly.innerHTML = '🔒 UNLOCK';
+                els.toolSelector.classList.add('disabled');
+                els.readonlyOverlay.classList.add('active');
+                els.readonlyIndicator.classList.add('show');
+                els.readonlyBadge.style.display = 'inline-block';
+                els.captureTarget.classList.add('readonly');
+                els.btnClear.disabled = true;
+
+                // 禁用日历格子
+                document.querySelectorAll('.day-cell').forEach(cell => {
+                    cell.classList.add('disabled');
+                    cell.setAttribute('aria-disabled', 'true');
+                });
+
+                showNotification('READ ONLY MODE ENABLED', 'warning');
+            } else {
+                // 退出只读
+                els.btnReadonly.classList.remove('active');
+                els.btnReadonly.setAttribute('aria-pressed', 'false');
+                els.btnReadonly.innerHTML = 'READONLY';
+                els.toolSelector.classList.remove('disabled');
+                els.readonlyOverlay.classList.remove('active');
+                els.readonlyIndicator.classList.remove('show');
+                els.readonlyBadge.style.display = 'none';
+                els.captureTarget.classList.remove('readonly');
+                els.btnClear.disabled = false;
+
+                // 启用日历格子
+                document.querySelectorAll('.day-cell').forEach(cell => {
+                    if (!cell.classList.contains('empty-cell')) {
+                        cell.classList.remove('disabled');
+                        cell.setAttribute('aria-disabled', 'false');
+                    }
+                });
+
+                showNotification('EDIT MODE ENABLED', 'success');
+            }
+        }
+
+        // --- 核心逻辑 ---
+
+        function changeMonth(delta) {
+            STATE.currentDate.setMonth(STATE.currentDate.getMonth() + delta);
             renderCalendar();
-        }
-
-        function saveData() {
-            if(STATE.readonly) return;
-            localStorage.setItem(CONFIG.storageKey, JSON.stringify(STATE.data));
             updateStats();
         }
 
-        function handleCellInteract(dateStr) {
+        function saveData() {
+            if (STATE.readonly) return;
+            // 使用 requestIdleCallback 进行后台保存（如果支持）
+            if (window.requestIdleCallback) {
+                requestIdleCallback(() => {
+                    localStorage.setItem(CONFIG.storageKey, JSON.stringify(STATE.data));
+                });
+            } else {
+                localStorage.setItem(CONFIG.storageKey, JSON.stringify(STATE.data));
+            }
+        }
+
+        function getShift(dateStr) {
+            return STATE.data[dateStr] || 'none';
+        }
+
+        function setShift(dateStr, type) {
+            if (STATE.readonly) return;
+
+            if (type === 'none') {
+                delete STATE.data[dateStr];
+            } else {
+                STATE.data[dateStr] = type;
+            }
+
+            // 批量更新：延迟保存
+            clearTimeout(STATE.saveTimeout);
+            STATE.saveTimeout = setTimeout(saveData, 500);
+
+            // 局部 DOM 更新
+            const cell = document.querySelector(`.day-cell[data-date="${dateStr}"]`);
+            if (cell) updateCellVisual(cell, type);
+        }
+
+        function handleInteraction(dateStr) {
             if (STATE.readonly) {
-                // 只读模式下的反馈动画
-                gsap.to(els.readonlyIndicator, {x: 5, yoyo: true, repeat: 3, duration: 0.05});
-                triggerHaptic(50); // 长震动表示错误
+                // 只读反馈
+                els.readonlyIndicator.style.animation = 'none';
+                setTimeout(() => {
+                    els.readonlyIndicator.style.animation = '';
+                }, 10);
                 return;
             }
 
-            const current = STATE.data[dateStr] || 'none';
+            const current = getShift(dateStr);
             let next = 'none';
 
             if (STATE.tool === 'cursor') {
                 const cycle = ['none', 'day', 'night', 'off'];
-                next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
+                const idx = cycle.indexOf(current);
+                next = cycle[(idx + 1) % cycle.length];
             } else if (STATE.tool === 'erase') {
                 next = 'none';
             } else {
@@ -712,166 +1263,308 @@
             }
 
             if (current !== next) {
-                if (next === 'none') delete STATE.data[dateStr];
-                else STATE.data[dateStr] = next;
-                
-                saveData();
-                updateCell(document.querySelector(`.day-cell[data-date="${dateStr}"]`), next);
-                triggerHaptic(15); // 操作成功的轻震动
+                setShift(dateStr, next);
             }
         }
 
-        // --- 渲染 ---
+        // --- 渲染逻辑 ---
+
         function renderCalendar() {
-            els.grid.innerHTML = '';
             const year = STATE.currentDate.getFullYear();
             const month = STATE.currentDate.getMonth();
-            const label = STATE.currentDate.toLocaleString('en-US', { month: 'short', year: '2-digit' }).toUpperCase();
-            
-            els.monthLabel.innerText = label;
-            els.mobMonthLabel.innerText = label;
 
-            const firstDay = new Date(year, month, 1).getDay();
+            els.monthLabel.innerText = STATE.currentDate.toLocaleString('en-US', {
+                month: 'short',
+                year: '2-digit'
+            }).toUpperCase();
+
+            const firstDay = new Date(year, month, 1);
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const todayStr = new Date().toISOString().slice(0,10);
+            const startDay = firstDay.getDay();
+
+            // 使用 DocumentFragment 优化批量 DOM 插入
+            const fragment = document.createDocumentFragment();
 
             // 填充空白
-            for(let i=0; i<firstDay; i++) {
-                els.grid.appendChild(createDiv('day-cell empty-cell'));
+            for (let i = 0; i < startDay; i++) {
+                const div = document.createElement('div');
+                div.className = 'day-cell empty-cell';
+                fragment.appendChild(div);
             }
 
-            for(let day=1; day<=daysInMonth; day++) {
-                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                const cell = createDiv('day-cell');
+            const today = new Date();
+            const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const cell = document.createElement('div');
+                cell.className = 'day-cell';
                 cell.dataset.date = dateStr;
-                
-                if(dateStr === todayStr) cell.classList.add('is-today');
-                if(STATE.readonly) cell.classList.add('disabled');
 
-                cell.innerHTML = `<div class="date-num">${day}</div><div class="shift-mark"></div>`;
-                
-                updateCell(cell, STATE.data[dateStr] || 'none');
+                if (STATE.readonly) {
+                    cell.classList.add('disabled');
+                    cell.setAttribute('aria-disabled', 'true');
+                }
 
-                // 交互绑定 (兼顾 PC 和 Mobile)
-                cell.onmousedown = () => handleCellInteract(dateStr);
-                // 移动端 Touch 优化：防止延迟，但允许滚动
-                // 简单的 click 在 viewport 设置了 no-scalable 后其实延迟很小
-                // 保持 click 即可，复杂 touch 逻辑容易导致无法滚动
+                if (isCurrentMonth && day === today.getDate()) {
+                    cell.classList.add('is-today');
+                }
 
-                els.grid.appendChild(cell);
+                const num = document.createElement('div');
+                num.className = 'date-num';
+                num.innerText = day;
+
+                const mark = document.createElement('div');
+                mark.className = 'shift-mark';
+
+                cell.appendChild(num);
+                cell.appendChild(mark);
+
+                updateCellVisual(cell, getShift(dateStr));
+
+                // 事件委托（优化版）
+                cell.addEventListener('mousedown', () => handleInteraction(dateStr));
+                cell.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    handleInteraction(dateStr);
+                }, { passive: false });
+
+                fragment.appendChild(cell);
             }
+
+            // 一次性批量插入 DOM
+            els.grid.innerHTML = '';
+            els.grid.appendChild(fragment);
+
+            PERF.log('Calendar rendered');
         }
 
-        function createDiv(className) {
-            const d = document.createElement('div');
-            d.className = className;
-            return d;
-        }
-
-        function updateCell(cell, type) {
-            if(!cell) return;
+        function updateCellVisual(cell, type) {
             cell.classList.remove('status-day', 'status-night', 'status-off');
             const mark = cell.querySelector('.shift-mark');
-            
+
             if (type !== 'none') {
                 cell.classList.add(`status-${type}`);
                 mark.innerText = type === 'day' ? 'DAY' : (type === 'night' ? 'NGT' : 'OFF');
-                
-                // 只有新增状态时才播放动画
-                gsap.fromTo(mark, {opacity:0, x: -5}, {opacity:1, x:0, duration: 0.2});
             } else {
                 mark.innerText = '';
             }
         }
 
+        // --- 统计优化 ---
+
         function updateStats() {
             const year = STATE.currentDate.getFullYear();
             const month = STATE.currentDate.getMonth() + 1;
             const prefix = `${year}-${String(month).padStart(2, '0')}`;
-            
-            let c = {day:0, night:0, off:0};
-            Object.keys(STATE.data).forEach(k => {
-                if(k.startsWith(prefix)) {
-                    const t = STATE.data[k];
-                    if(c[t] !== undefined) c[t]++;
+
+            let counts = { day: 0, night: 0, off: 0 };
+
+            // 优化：只遍历当月数据
+            Object.entries(STATE.data).forEach(([date, type]) => {
+                if (date.startsWith(prefix) && counts[type] !== undefined) {
+                    counts[type]++;
                 }
             });
 
-            animateNum(els.stats.day, c.day);
-            animateNum(els.stats.night, c.night);
-            animateNum(els.stats.off, c.off);
-            animateNum(els.stats.total, c.day + c.night);
+            animateValue(els.stats.day, counts.day);
+            animateValue(els.stats.night, counts.night);
+            animateValue(els.stats.off, counts.off);
+            animateValue(els.stats.total, counts.day + counts.night);
         }
 
-        function animateNum(el, val) {
-            gsap.to(el, { innerText: val, duration: 0.5, snap: { innerText: 1 } });
+        function animateValue(element, end) {
+            const start = parseInt(element.innerText);
+            if (start === end) return;
+
+            if (window.gsap) {
+                gsap.to(element, {
+                    innerText: end,
+                    duration: 0.4,
+                    snap: { innerText: 1 },
+                    ease: "power1.out"
+                });
+            } else {
+                element.innerText = end;
+            }
         }
 
-        // --- 工具函数 ---
+        // --- 时钟 ---
+
         function startClock() {
-            setInterval(() => {
-                document.getElementById('systemTime').innerText = new Date().toLocaleTimeString('en-GB');
-            }, 1000);
+            const updateTime = () => {
+                const now = new Date();
+                els.sysTime.innerText = `SYS_TIME: ${now.toLocaleTimeString('en-GB')}`;
+            };
+
+            updateTime();
+            // 使用节流减少更新频率
+            setInterval(updateTime, 1000);
         }
 
-        function triggerHaptic(pattern) {
-            if (navigator.vibrate) navigator.vibrate(pattern);
-        }
+        // --- 导出/导入 ---
 
         function exportJson() {
-            const blob = new Blob([JSON.stringify(STATE.data, null, 2)], {type: 'application/json'});
+            const str = JSON.stringify(STATE.data, null, 2);
+            const blob = new Blob([str], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `shift_data_${new Date().toISOString().slice(0,10)}.json`;
+            a.href = url;
+            a.download = `shift_data_${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
+            URL.revokeObjectURL(url);
         }
 
         function importJson(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
             const reader = new FileReader();
             reader.onload = (evt) => {
                 try {
-                    STATE.data = JSON.parse(evt.target.result);
-                    saveData();
-                    renderCalendar();
-                } catch(err) { alert("DATA CORRUPTED"); }
+                    const newData = JSON.parse(evt.target.result);
+                    if (confirm("Overwrite current data?")) {
+                        STATE.data = newData;
+                        saveData();
+                        renderCalendar();
+                        updateStats();
+                        showNotification('Data imported successfully', 'success');
+                    }
+                } catch (err) {
+                    showNotification('Invalid JSON file', 'error');
+                }
             };
-            reader.readAsText(e.target.files[0]);
+            reader.readAsText(file);
+        }
+
+        function clearData() {
+            if (STATE.readonly) {
+                showNotification('Cannot clear data in read-only mode', 'error');
+                return;
+            }
+
+            if (confirm("FACTORY RESET: DELETE ALL SHIFT DATA?")) {
+                STATE.data = {};
+                saveData();
+                renderCalendar();
+                updateStats();
+                showNotification('Data cleared', 'success');
+            }
         }
 
         function exportImage() {
+            if (!window.html2canvas) {
+                showNotification('Export feature not available', 'error');
+                return;
+            }
+
             const target = document.getElementById('capture-target');
-            const pHeader = document.getElementById('print-header');
-            const pFooter = document.getElementById('print-footer');
-            const pLabel = document.getElementById('print-month-label');
-            
-            // 准备截图状态
-            pHeader.style.display = 'block';
-            pFooter.style.display = 'block';
-            pLabel.innerText = els.monthLabel.innerText;
-            
-            // 如果是移动端，强制设置一个宽度以保证截图清晰度
-            const originalWidth = target.style.width;
-            if (window.innerWidth < 768) target.style.width = "800px";
+            const printHeader = document.getElementById('print-header');
+            const printFooter = document.getElementById('print-footer');
+            const printMonth = document.getElementById('print-month');
 
-            // 临时解除只读样式（为了截图好看）
-            const wasReadonly = STATE.readonly;
-            if(wasReadonly) document.querySelectorAll('.day-cell').forEach(c => c.classList.remove('disabled'));
+            printHeader.style.display = 'block';
+            printFooter.style.display = 'block';
+            printMonth.innerText = els.monthLabel.innerText;
+            target.style.width = "800px";
 
-            html2canvas(target, { scale: 2, backgroundColor: "#E6E4D8" }).then(canvas => {
+            const overlayActive = els.readonlyOverlay.classList.contains('active');
+            if (overlayActive) {
+                els.readonlyOverlay.classList.remove('active');
+            }
+
+            const btn = document.getElementById('btnExportImg');
+            const originalText = btn.innerText;
+            btn.innerText = "RENDERING...";
+            btn.disabled = true;
+
+            html2canvas(target, {
+                scale: 2,
+                backgroundColor: "#E6E4D8",
+                logging: false,
+                useCORS: true
+            }).then(canvas => {
                 const link = document.createElement('a');
                 link.download = `Schedule_${els.monthLabel.innerText}.png`;
                 link.href = canvas.toDataURL();
                 link.click();
+                showNotification('Image exported', 'success');
+            }).catch(() => {
+                showNotification('Export failed', 'error');
             }).finally(() => {
-                // 恢复
-                pHeader.style.display = 'none';
-                pFooter.style.display = 'none';
-                target.style.width = originalWidth;
-                if(wasReadonly) renderCalendar(); // 重新渲染恢复 disabled 状态
+                printHeader.style.display = 'none';
+                printFooter.style.display = 'none';
+                target.style.width = "";
+                btn.innerText = originalText;
+                btn.disabled = false;
+
+                if (overlayActive) {
+                    els.readonlyOverlay.classList.add('active');
+                }
             });
         }
 
-        init();
+        // --- 通知系统 ---
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            const bgColor = {
+                warning: 'var(--orange)',
+                error: 'var(--red)',
+                success: 'var(--green)',
+                info: 'var(--blue)'
+            }[type];
+
+            notification.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) translateZ(0);
+                background: ${bgColor};
+                color: #fff;
+                padding: 15px 30px;
+                font-family: 'Archivo Black', sans-serif;
+                font-size: 1.2rem;
+                z-index: 10000;
+                box-shadow: 0 0 0 5px rgba(0,0,0,0.3);
+                letter-spacing: 0.5px;
+                animation: notificationPulse 0.5s ease-out;
+            `;
+            notification.setAttribute('role', 'status');
+            notification.setAttribute('aria-live', 'polite');
+            notification.innerText = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'fadeOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 2000);
+        }
+
+        // 添加动画样式
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes notificationPulse {
+                0% { transform: translate(-50%, -50%) scale(0.8) translateZ(0); opacity: 0; }
+                50% { transform: translate(-50%, -50%) scale(1.1) translateZ(0); }
+                100% { transform: translate(-50%, -50%) scale(1) translateZ(0); opacity: 1; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        PERF.log('Notification system initialized');
+
+        // 启动应用
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
     </script>
 </body>
 </html>
