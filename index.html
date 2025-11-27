@@ -2,11 +2,9 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <!-- 优化 Viewport：禁止用户缩放，适配刘海屏 safe-area -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#111111">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>IND_SHIFT_MGR // MOBILE</title>
+    <title>IND_SHIFT_MGR_V2.1 // 工业班表系统</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,6 +15,7 @@
 
     <style>
         :root {
+            /* 调色板 V2 */
             --bg-paper: #E6E4D8;
             --bg-dark: #111111;
             --ink: #000000;
@@ -24,16 +23,16 @@
             --yellow: #FFCC00;
             --red: #FF3300;
             --orange: #FF6600;
-            
-            --border-thick: 2px; /* 移动端稍微减细一点 */
-            --safe-bottom: env(safe-area-inset-bottom, 20px);
+            --border-thick: 3px;
         }
 
         * {
             box-sizing: border-box;
             border-radius: 0 !important; 
             -webkit-tap-highlight-color: transparent;
-            user-select: none; /* 防止长按选中文本 */
+            /* 禁止长按选中文本，提升APP质感 */
+            user-select: none; 
+            -webkit-touch-callout: none;
         }
 
         body {
@@ -42,358 +41,510 @@
             background-color: var(--bg-paper);
             color: var(--ink);
             font-family: 'JetBrains Mono', monospace;
-            overflow: hidden; /* 禁止整体滚动，内部滚动 */
-            height: 100dvh; /* 动态视口高度 */
-            display: flex;
-            flex-direction: column;
+            overflow-x: hidden;
+            /* 移动端底部安全距离 */
+            padding-bottom: env(safe-area-inset-bottom);
+            background-image: 
+                linear-gradient(var(--bg-paper) 2px, transparent 2px),
+                linear-gradient(90deg, var(--bg-paper) 2px, transparent 2px),
+                linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+            background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
         }
 
-        /* CRT 效果稍微减弱以提高移动端可读性 */
+        /* --- CRT 覆盖层 --- */
         .crt-overlay {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.02) 50%);
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%);
             background-size: 100% 4px;
             pointer-events: none;
             z-index: 9999;
         }
 
-        /* --- 顶部区域 (压缩高度) --- */
+        /* --- 容器 --- */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            min-height: 100vh;
+            border-left: var(--border-thick) solid var(--ink);
+            border-right: var(--border-thick) solid var(--ink);
+            background: var(--bg-paper);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* --- Header --- */
         header {
-            flex-shrink: 0;
             border-bottom: var(--border-thick) solid var(--ink);
-            padding: 10px 15px;
+            padding: 2rem 1rem;
             background: var(--ink);
             color: var(--bg-paper);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 10;
+            position: relative;
         }
 
         h1 {
             font-family: 'Archivo Black', sans-serif;
-            font-size: 1.2rem;
+            font-size: clamp(1.5rem, 5vw, 3.5rem); /* 移动端字体自适应 */
             margin: 0;
-            letter-spacing: -1px;
+            line-height: 1;
+            text-transform: uppercase;
+            letter-spacing: -2px;
         }
 
-        .header-actions {
+        .meta-info {
             display: flex;
-            gap: 10px;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 0.75rem;
+            opacity: 0.8;
+            border-top: 1px dashed var(--bg-paper);
+            padding-top: 10px;
         }
 
-        /* 小图标按钮 */
-        .icon-btn {
-            background: transparent;
-            border: 1px solid var(--bg-paper);
-            color: var(--bg-paper);
-            width: 32px; height: 32px;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-        }
-        .icon-btn svg { width: 16px; height: 16px; }
-
-        /* --- 仪表盘 (紧凑版) --- */
+        /* --- 仪表盘 (Dashboard) --- */
         .dashboard {
-            flex-shrink: 0;
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr;
+            grid-template-columns: repeat(4, 1fr);
             border-bottom: var(--border-thick) solid var(--ink);
             background: #fff;
-            font-size: 0.8rem;
         }
 
         .stat-box {
-            padding: 8px 4px;
-            border-right: 1px solid var(--ink);
-            text-align: center;
+            padding: 15px;
+            border-right: var(--border-thick) solid var(--ink);
             display: flex;
             flex-direction: column;
-            align-items: center;
+            justify-content: space-between;
+            min-width: 0; /* 防止溢出 */
         }
-        .stat-box:last-child { border-right: none; background: var(--ink); color: #fff; }
+        .stat-box:last-child { border-right: none; }
 
-        .stat-label { font-size: 0.6rem; font-weight: 800; opacity: 0.6; margin-bottom: 2px; }
-        .stat-value { font-family: 'Archivo Black', sans-serif; font-size: 1.2rem; line-height: 1; }
+        .stat-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat-value { font-family: 'Archivo Black', sans-serif; font-size: 1.8rem; line-height: 1; }
         
         .stat-day .stat-value { color: var(--blue); }
-        .stat-night .stat-value { color: #DDAA00; }
+        .stat-night .stat-value { color: #DDAA00; text-shadow: 1px 1px 0px #000; }
         .stat-off .stat-value { color: var(--red); }
 
-        /* --- 主滚动区域 --- */
-        .main-scroll-area {
-            flex: 1;
-            overflow-y: auto;
-            background: var(--bg-paper);
-            position: relative;
-            /* 增加底部内边距，防止内容被底部工具栏遮挡 */
-            padding-bottom: calc(80px + var(--safe-bottom)); 
+        /* --- 工具栏区域 (Tool Deck) --- */
+        .tool-deck {
+            padding: 20px;
+            border-bottom: var(--border-thick) solid var(--ink);
+            background: #f4f4f4;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: space-between;
         }
 
-        .month-display-strip {
-            position: sticky;
-            top: 0;
-            background: var(--bg-paper);
-            border-bottom: var(--border-thick) solid var(--ink);
-            padding: 10px;
+        /* PC端月份控制 */
+        .month-ctrl-desktop {
             display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* 移动端月份控制 (默认隐藏) */
+        .month-ctrl-mobile {
+            display: none;
             justify-content: space-between;
             align-items: center;
-            z-index: 5;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            padding: 10px;
+            background: var(--ink);
+            color: var(--bg-paper);
+            border-bottom: var(--border-thick) solid var(--ink);
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
-        .month-nav-btn {
-            background: none; border: none; font-family: 'Archivo Black'; font-size: 1.2rem;
-            padding: 0 15px; cursor: pointer; color: var(--ink);
+        .month-label {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 1.5rem;
+            min-width: 140px;
+            text-align: center;
         }
 
-        #monthLabel { font-family: 'Archivo Black'; font-size: 1.5rem; }
+        /* 工具选择器 */
+        .tool-selector {
+            display: flex;
+            gap: 10px;
+            background: var(--ink);
+            padding: 5px;
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+            transition: opacity 0.3s;
+        }
+        
+        .tool-selector.disabled {
+            opacity: 0.4; pointer-events: none; filter: grayscale(1);
+        }
 
-        /* --- 日历网格 --- */
+        .tool-btn {
+            border: 2px solid transparent;
+            background: var(--bg-paper);
+            color: var(--ink);
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            position: relative;
+        }
+        
+        .tool-btn.active {
+            border-color: #fff;
+            transform: scale(0.95);
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+        }
+        /* 选中态颜色 */
+        .tool-btn[data-tool="day"].active { background: var(--blue); color: #fff; }
+        .tool-btn[data-tool="night"].active { background: var(--yellow); color: #000; }
+        .tool-btn[data-tool="off"].active { background: var(--red); color: #fff; }
+        .tool-btn[data-tool="erase"].active { background: #fff; text-decoration: line-through; }
+
+        /* 通用按钮 */
+        .btn {
+            background: transparent;
+            border: 2px solid var(--ink);
+            color: var(--ink);
+            padding: 8px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.8rem;
+            cursor: pointer;
+            box-shadow: 3px 3px 0px var(--ink);
+            text-transform: uppercase;
+        }
+        .btn:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px var(--ink); }
+        .btn-readonly.active { background: var(--orange); color: #fff; box-shadow: inset 0 0 0 2px #fff; }
+
+        .btn-group { display: flex; gap: 10px; }
+
+        /* --- 日历区域 --- */
+        .calendar-area {
+            padding: 20px;
+            background: var(--bg-paper);
+            flex-grow: 1;
+        }
+
         .calendar-header {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
+            border-bottom: var(--border-thick) solid var(--ink);
             background: var(--ink);
-            gap: 1px;
-            padding-top: 2px;
+            gap: 2px;
+            margin-bottom: 2px;
         }
+
         .weekday {
             background: var(--bg-paper);
+            padding: 10px 0;
             text-align: center;
-            font-size: 0.7rem;
             font-weight: 800;
-            padding: 5px 0;
+            font-size: 0.8rem;
         }
 
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            gap: 1px;
+            gap: 2px;
             background: var(--ink);
             border-bottom: 2px solid var(--ink);
-            /* 移动端增加触摸反馈区域 */
-            touch-action: pan-y; /* 允许垂直滚动，JS接管水平滑动 */
         }
 
         .day-cell {
             background: var(--bg-paper);
-            aspect-ratio: 1 / 1.1; /* 更竖长，适合显示内容 */
+            aspect-ratio: 1 / 0.85; 
             position: relative;
+            cursor: pointer;
             padding: 4px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            transition: transform 0.1s;
+            transition: background 0.1s;
         }
-        
-        .day-cell:active { transform: scale(0.95); z-index: 10; background: #fff; }
+        .day-cell.disabled { opacity: 0.5; pointer-events: none; }
 
-        .date-num { font-family: 'Archivo Black'; font-size: 1rem; opacity: 0.4; }
-        .shift-mark { font-size: 0.7rem; font-weight: 800; text-align: right; }
+        .date-num { font-family: 'Archivo Black'; font-size: 1.2rem; opacity: 0.3; pointer-events: none; }
+        .shift-mark { font-size: 0.7rem; font-weight: 700; text-align: right; pointer-events: none; }
 
         /* 状态颜色 */
         .day-cell.status-day { background: var(--blue); color: #fff; }
-        .day-cell.status-day .shift-mark { background: #fff; color: var(--blue); padding: 0 3px; }
-
+        .day-cell.status-day .shift-mark { background: #fff; color: var(--blue); padding: 0 2px; }
+        
         .day-cell.status-night { background: var(--yellow); color: #000; }
-        .day-cell.status-night .shift-mark { background: #000; color: var(--yellow); padding: 0 3px;}
+        .day-cell.status-night .shift-mark { background: #000; color: var(--yellow); padding: 0 2px; }
 
         .day-cell.status-off { 
             background: var(--red); color: #fff; 
-            background-image: linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), 
-            linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000);
+            background-image: linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000);
             background-size: 10px 10px;
             background-position: 0 0, 5px 5px;
             opacity: 0.9;
         }
-        .day-cell.status-off .shift-mark { background: #000; color: #fff; padding: 0 3px; }
+        .day-cell.status-off .shift-mark { background: #000; color: #fff; padding: 0 2px; }
 
-        .day-cell.is-today { box-shadow: inset 0 0 0 3px var(--ink); }
+        .day-cell.is-today { box-shadow: inset 0 0 0 4px var(--ink); z-index: 2; }
+        .empty-cell { background: #dcdad0; pointer-events: none; }
 
-        /* --- 底部固定工具台 (Mobile Control Deck) --- */
-        .mobile-control-deck {
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            background: var(--ink);
-            padding: 10px 10px calc(10px + var(--safe-bottom)) 10px;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            z-index: 100;
-            box-shadow: 0 -4px 15px rgba(0,0,0,0.3);
-        }
-
-        .control-btn {
-            width: 50px; height: 50px;
-            border: 2px solid transparent;
-            background: #333;
-            color: #fff;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            font-size: 0.7rem; font-weight: bold;
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            position: relative;
-        }
-
-        .control-btn svg { width: 20px; height: 20px; margin-bottom: 2px; }
-
-        /* 激活状态：向上浮起 */
-        .control-btn.active {
-            transform: translateY(-15px) scale(1.1);
-            border: 2px solid #fff;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            z-index: 101;
-        }
-
-        /* 具体颜色 */
-        .btn-day.active { background: var(--blue); }
-        .btn-night.active { background: var(--yellow); color: #000; }
-        .btn-off.active { background: var(--red); }
-        .btn-erase.active { background: #fff; color: #000; }
-        
-        .mode-indicator {
-            position: absolute;
-            top: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--ink);
-            color: #fff;
-            padding: 4px 10px;
+        footer {
+            padding: 20px;
+            border-top: var(--border-thick) solid var(--ink);
+            text-align: center;
             font-size: 0.7rem;
-            white-space: nowrap;
-            opacity: 0;
-            transition: opacity 0.2s;
-            pointer-events: none;
-        }
-        .control-btn.active .mode-indicator { opacity: 1; }
-
-        /* --- 只读遮罩 --- */
-        .readonly-status-bar {
-            position: fixed;
-            bottom: calc(70px + var(--safe-bottom));
-            left: 50%; transform: translateX(-50%);
-            background: var(--orange);
-            color: #fff;
-            padding: 5px 15px;
-            font-family: 'Archivo Black';
-            font-size: 0.8rem;
-            pointer-events: none;
-            display: none;
-            z-index: 99;
-            box-shadow: 4px 4px 0 #000;
+            opacity: 0.5;
+            background: var(--bg-paper);
         }
 
-        /* 隐藏的文件输入 */
-        #fileInput { display: none; }
+        /* 只读提示 */
+        .readonly-indicator {
+            position: fixed; top: 10px; right: 10px;
+            background: var(--orange); color: #fff;
+            padding: 8px 15px; font-weight: bold;
+            transform: translateY(-100px); transition: transform 0.3s;
+            z-index: 2000; box-shadow: 4px 4px 0 #000;
+        }
+        .readonly-indicator.show { transform: translateY(0); }
 
-        /* --- 打印容器 (截图用) --- */
-        #capture-target { padding: 10px; background: var(--bg-paper); }
+        /* =========================================
+           移动端深度优化 (Max Width 768px)
+           ========================================= */
+        @media (max-width: 768px) {
+            .container {
+                border-left: none; border-right: none;
+                /* 为底部固定工具栏留出空间 */
+                padding-bottom: 80px; 
+            }
+
+            header {
+                padding: 1rem;
+            }
+            header h1 { font-size: 2rem; }
+            .meta-info { display: none; } /* 移动端节省空间，隐藏次要信息 */
+
+            /* 1. 仪表盘优化：横向滚动 */
+            .dashboard {
+                display: flex;
+                overflow-x: auto;
+                scroll-snap-type: x mandatory;
+                border-bottom: var(--border-thick) solid var(--ink);
+                /* 隐藏滚动条 */
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .dashboard::-webkit-scrollbar { display: none; }
+
+            .stat-box {
+                min-width: 35%; /* 露出一点下一个，提示可滚动 */
+                scroll-snap-align: start;
+                padding: 10px;
+                border-right: 1px solid var(--ink);
+            }
+            .stat-value { font-size: 1.5rem; }
+
+            /* 2. PC工具栏拆分：移动端隐藏原始工具栏的布局 */
+            .tool-deck {
+                padding: 10px;
+                gap: 10px;
+                background: #e0e0e0;
+            }
+
+            /* 3. 移动端月份导航：置顶悬浮 */
+            .month-ctrl-desktop { display: none; }
+            .month-ctrl-mobile { 
+                display: flex; 
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+            .month-btn-mobile {
+                background: var(--bg-paper); border: 2px solid #fff;
+                width: 40px; height: 36px;
+                display: flex; align-items: center; justify-content: center;
+                font-weight: bold; font-size: 1.2rem;
+            }
+
+            /* 4. 底部固定工具栏 (Thumb Zone) */
+            .mobile-tools-dock {
+                position: fixed;
+                bottom: 0; left: 0; right: 0;
+                background: var(--ink);
+                padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+                display: flex !important;
+                justify-content: space-between;
+                align-items: center;
+                z-index: 1000;
+                box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+            }
+
+            /* 将PC的 tool-selector 搬到底部 */
+            .tool-selector {
+                background: transparent;
+                box-shadow: none;
+                padding: 0;
+                gap: 5px;
+                flex: 1;
+                justify-content: center;
+            }
+
+            .tool-btn {
+                flex: 1; /* 均分宽度 */
+                height: 50px; /* 更大的点击区域 */
+                font-size: 1.4rem;
+                max-width: 60px;
+                border-radius: 4px !important; /* 移动端稍微圆润一点点防止看起来太尖锐，或者保持0 */
+            }
+
+            /* 隐藏 PC 上的其他按钮，放入“更多”或者简化 */
+            .btn-group {
+                display: none; /* 移动端暂时隐藏复杂导出按钮，专注操作 */
+            }
+            
+            /* 移动端日历格子比例 */
+            .day-cell { aspect-ratio: 1/1; }
+            .date-num { font-size: 1rem; }
+            .calendar-area { padding: 10px 5px; }
+            
+            /* 移动端增加一个只读切换和清除的小按钮在 Header */
+            .mobile-header-actions {
+                display: flex; gap: 10px; margin-top: 10px;
+            }
+            .mobile-action-btn {
+                font-size: 0.7rem; padding: 4px 8px; border: 1px solid var(--bg-paper);
+                color: var(--bg-paper); background: transparent;
+            }
+            .mobile-action-btn.active { background: var(--orange); border-color: var(--orange); }
+        }
+
+        /* PC端隐藏移动端专用元素 */
+        @media (min-width: 769px) {
+            .mobile-tools-dock { display: none; }
+            .mobile-header-actions { display: none; }
+        }
 
     </style>
 </head>
 <body>
 
     <div class="crt-overlay"></div>
-    <div class="readonly-status-bar" id="readonlyBar">LOCK MODE</div>
+    <div class="readonly-indicator" id="readonlyIndicator">🔒 READ ONLY</div>
 
-    <!-- 1. Compact Header -->
-    <header>
-        <div>
-            <h1>SHIFT_V2</h1>
-            <span style="font-size:0.6rem; opacity:0.7">MOBILE_BUILD</span>
-        </div>
-        <div class="header-actions">
-            <!-- 功能菜单: 导出/导入/重置 -->
-            <button class="icon-btn" id="btnMenu" title="Menu">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-            </button>
-            <button class="icon-btn" id="btnReadonly" title="Lock">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-            </button>
-        </div>
-    </header>
-
-    <!-- 2. Compact Stats Grid -->
-    <div class="dashboard">
-        <div class="stat-box stat-day">
-            <span class="stat-label">DAY</span>
-            <span class="stat-value" id="countDay">0</span>
-        </div>
-        <div class="stat-box stat-night">
-            <span class="stat-label">NGT</span>
-            <span class="stat-value" id="countNight">0</span>
-        </div>
-        <div class="stat-box stat-off">
-            <span class="stat-label">OFF</span>
-            <span class="stat-value" id="countOff">0</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-label">TOT</span>
-            <span class="stat-value" id="countTotal">0</span>
-        </div>
-    </div>
-
-    <!-- 3. Scrollable Calendar Area -->
-    <div class="main-scroll-area" id="scrollArea">
+    <div class="container">
         
-        <div class="month-display-strip">
-            <button class="month-nav-btn" id="prevMonth">&lt;</button>
-            <div id="monthLabel">OCT 23</div>
-            <button class="month-nav-btn" id="nextMonth">&gt;</button>
-        </div>
-
-        <div id="capture-target">
-            <div class="calendar-header">
-                <div class="weekday">SUN</div><div class="weekday">MON</div><div class="weekday">TUE</div>
-                <div class="weekday">WED</div><div class="weekday">THU</div><div class="weekday">FRI</div><div class="weekday">SAT</div>
+        <header>
+            <div style="display:flex; justify-content:space-between; align-items:start;">
+                <div>
+                    <div style="display:flex; align-items:baseline; gap:8px;">
+                        <h1>Shift_Mgr</h1>
+                        <span style="background:var(--bg-paper); color:var(--ink); padding:2px 4px; font-weight:bold; font-size:0.7rem;">V2.1</span>
+                    </div>
+                    <!-- 移动端 Header 里的简易操作区 -->
+                    <div class="mobile-header-actions">
+                        <button class="mobile-action-btn" id="mobBtnReadonly">LOCK</button>
+                        <button class="mobile-action-btn" id="mobBtnClear">CLR</button>
+                        <button class="mobile-action-btn" id="mobBtnSave">SAVE</button>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div id="systemTime" style="font-size:0.7rem; opacity:0.7;">00:00:00</div>
+                </div>
             </div>
-            <div class="calendar-grid" id="calendarGrid">
-                <!-- Grid items generated by JS -->
+            <div class="meta-info">
+                <span>// INDUSTRIAL STANDARD</span>
+                <span>RENDER: DOM_G5</span>
+            </div>
+        </header>
+
+        <!-- 仪表盘：移动端横向滚动，PC端Grid -->
+        <div class="dashboard">
+            <div class="stat-box stat-day">
+                <span class="stat-label">Day (白班)</span>
+                <span class="stat-value" id="countDay">0</span>
+            </div>
+            <div class="stat-box stat-night">
+                <span class="stat-label">Night (晚班)</span>
+                <span class="stat-value" id="countNight">0</span>
+            </div>
+            <div class="stat-box stat-off">
+                <span class="stat-label">Off (休息)</span>
+                <span class="stat-value" id="countOff">0</span>
+            </div>
+            <div class="stat-box" style="background: var(--ink); color: var(--bg-paper);">
+                <span class="stat-label" style="color:#aaa;">Total</span>
+                <span class="stat-value" id="countTotal">0</span>
             </div>
         </div>
+
+        <!-- 移动端：置顶月份导航 -->
+        <div class="month-ctrl-mobile">
+            <div class="month-btn-mobile" id="mobPrevMonth">&lt;</div>
+            <div class="month-label" id="mobMonthLabel">OCT 23</div>
+            <div class="month-btn-mobile" id="mobNextMonth">&gt;</div>
+        </div>
+
+        <!-- PC端：工具栏 (移动端会隐藏大部分内容，只保留结构用于逻辑) -->
+        <div class="tool-deck">
+            <div class="month-ctrl-desktop">
+                <button class="btn" id="prevMonth">PREV</button>
+                <div class="month-label" id="monthLabel">OCT 23</div>
+                <button class="btn" id="nextMonth">NEXT</button>
+            </div>
+
+            <!-- PC端按钮组 -->
+            <div class="btn-group">
+                <button class="btn btn-readonly" id="btnReadonly">READONLY</button>
+                <button class="btn" id="btnExportImg">IMG</button>
+                <button class="btn" id="btnExportJson">DATA</button>
+                <button class="btn" id="btnClear" style="border-color:var(--red); color:var(--red);">CLR</button>
+                <input type="file" id="fileInput" hidden accept=".json">
+            </div>
+        </div>
+
+        <div class="calendar-area">
+            <div id="capture-target">
+                <!-- 截图用的隐藏标题 -->
+                <div id="print-header" style="display:none; padding-bottom:10px; border-bottom:2px solid #000; margin-bottom:10px;">
+                    <h2 style="margin:0; font-family:'Archivo Black'">SHIFT SCHEDULE</h2>
+                    <div id="print-month-label"></div>
+                </div>
+
+                <div class="calendar-header">
+                    <div class="weekday">SUN</div><div class="weekday">MON</div><div class="weekday">TUE</div>
+                    <div class="weekday">WED</div><div class="weekday">THU</div><div class="weekday">FRI</div><div class="weekday">SAT</div>
+                </div>
+                <div class="calendar-grid" id="calendarGrid">
+                    <!-- JS 生成 -->
+                </div>
+                
+                <div id="print-footer" style="display:none; text-align:right; font-size:0.6rem; margin-top:5px;">Generated by Ind_Shift_Mgr</div>
+            </div>
+        </div>
+
+        <footer class="desktop-only-footer">
+            SYSTEM STATUS: ONLINE // TOUCH_OPTIMIZED
+        </footer>
     </div>
 
-    <!-- 4. Sticky Bottom Control Deck -->
-    <div class="mobile-control-deck">
-        
-        <div class="control-btn active" data-tool="cursor">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path></svg>
-            <span class="mode-indicator">TAP CYCLE</span>
+    <!-- 移动端：底部固定工具栏 (Dock) -->
+    <div class="mobile-tools-dock">
+        <!-- 这里是画笔工具，逻辑共用 -->
+        <div class="tool-selector" id="toolSelector">
+            <button class="tool-btn active" data-tool="cursor" title="Toggle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path></svg>
+            </button>
+            <button class="tool-btn" data-tool="day" style="color: var(--blue);">D</button>
+            <button class="tool-btn" data-tool="night" style="color: var(--yellow);">N</button>
+            <button class="tool-btn" data-tool="off" style="color: var(--red);">O</button>
+            <button class="tool-btn" data-tool="erase">X</button>
         </div>
-
-        <div class="control-btn btn-day" data-tool="day">
-            <div style="font-family:'Archivo Black'; font-size:1.2rem;">D</div>
-            <span class="mode-indicator">PAINT DAY</span>
-        </div>
-
-        <div class="control-btn btn-night" data-tool="night">
-            <div style="font-family:'Archivo Black'; font-size:1.2rem;">N</div>
-            <span class="mode-indicator">PAINT NIGHT</span>
-        </div>
-
-        <div class="control-btn btn-off" data-tool="off">
-            <div style="font-family:'Archivo Black'; font-size:1.2rem;">O</div>
-            <span class="mode-indicator">PAINT OFF</span>
-        </div>
-
-        <div class="control-btn btn-erase" data-tool="erase">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-            <span class="mode-indicator">ERASER</span>
-        </div>
-
     </div>
-
-    <input type="file" id="fileInput" accept=".json">
 
     <script>
-        // --- 触觉反馈封装 ---
-        const vibrate = (pattern = 10) => {
-            if (navigator.vibrate) navigator.vibrate(pattern);
-        };
-
-        // --- 配置与状态 ---
+        // --- 核心逻辑 ---
         const CONFIG = {
             storageKey: 'ind_shift_v2_data',
             readonlyKey: 'ind_shift_v2_readonly'
@@ -406,12 +557,12 @@
             readonly: localStorage.getItem(CONFIG.readonlyKey) === 'true'
         };
 
-        // --- DOM ---
+        // DOM引用
         const els = {
             grid: document.getElementById('calendarGrid'),
             monthLabel: document.getElementById('monthLabel'),
-            scrollArea: document.getElementById('scrollArea'),
-            controls: document.querySelectorAll('.control-btn'),
+            mobMonthLabel: document.getElementById('mobMonthLabel'),
+            tools: document.querySelectorAll('.tool-btn'),
             stats: {
                 day: document.getElementById('countDay'),
                 night: document.getElementById('countNight'),
@@ -419,181 +570,135 @@
                 total: document.getElementById('countTotal')
             },
             btnReadonly: document.getElementById('btnReadonly'),
-            btnMenu: document.getElementById('btnMenu'),
-            readonlyBar: document.getElementById('readonlyBar'),
-            fileInput: document.getElementById('fileInput')
+            mobBtnReadonly: document.getElementById('mobBtnReadonly'),
+            readonlyIndicator: document.getElementById('readonlyIndicator'),
+            toolSelector: document.getElementById('toolSelector')
         };
 
         function init() {
             renderCalendar();
             updateStats();
-            
-            if (STATE.readonly) toggleReadonly(true);
+            startClock();
+            if(STATE.readonly) toggleReadonly(true);
 
-            // 月份导航
-            document.getElementById('prevMonth').addEventListener('click', () => { vibrate(15); changeMonth(-1); });
-            document.getElementById('nextMonth').addEventListener('click', () => { vibrate(15); changeMonth(1); });
-
-            // 底部工具栏逻辑
-            els.controls.forEach(btn => {
-                btn.addEventListener('touchstart', (e) => { // 移动端优先使用 touchstart 减少延迟
-                    if (STATE.readonly) return;
-                    e.preventDefault(); 
-                    vibrate(20);
-                    
-                    els.controls.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    STATE.tool = btn.dataset.tool;
-                });
-            });
-
-            // 菜单按钮 (简化的 Action Sheet)
-            els.btnMenu.addEventListener('click', showActionMenu);
-
-            // 只读切换
-            els.btnReadonly.addEventListener('click', () => {
-                vibrate([10, 30, 10]);
-                toggleReadonly(!STATE.readonly);
-                localStorage.setItem(CONFIG.readonlyKey, STATE.readonly);
-            });
-
-            // 手势监听 (左右滑动切换月份)
-            initSwipeGestures();
-
-            // 文件导入
-            els.fileInput.addEventListener('change', importJson);
+            // 绑定事件
+            setupNavigation();
+            setupTools();
+            setupActions();
 
             // 进场动画
-            gsap.from(".mobile-control-deck", {y: 100, duration: 0.8, ease: "power4.out"});
+            gsap.from(".container", {y: 30, opacity: 0, duration: 0.6, ease: "power3.out"});
+            // 底部Dock进场
+            gsap.from(".mobile-tools-dock", {y: 100, duration: 0.8, delay: 0.2, ease: "back.out(1.2)"});
         }
 
-        // --- 手势识别 ---
-        function initSwipeGestures() {
-            let touchStartX = 0;
-            let touchStartY = 0;
+        // --- 导航逻辑 ---
+        function setupNavigation() {
+            const change = (delta) => {
+                // 触觉反馈
+                triggerHaptic(5);
+                STATE.currentDate.setMonth(STATE.currentDate.getMonth() + delta);
+                renderCalendar();
+                updateStats();
+            };
+
+            document.getElementById('prevMonth').onclick = () => change(-1);
+            document.getElementById('nextMonth').onclick = () => change(1);
             
-            const area = els.scrollArea; // 仅在日历区域监听
-
-            area.addEventListener('touchstart', e => {
-                touchStartX = e.changedTouches[0].screenX;
-                touchStartY = e.changedTouches[0].screenY;
-            }, {passive: true});
-
-            area.addEventListener('touchend', e => {
-                const touchEndX = e.changedTouches[0].screenX;
-                const touchEndY = e.changedTouches[0].screenY;
-                
-                const deltaX = touchEndX - touchStartX;
-                const deltaY = touchEndY - touchStartY;
-
-                // 只有当水平滑动明显大于垂直滑动时才触发，防止影响上下滚动
-                if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-                    if (deltaX > 0) changeMonth(-1); // 右滑 -> 上个月
-                    else changeMonth(1); // 左滑 -> 下个月
-                    vibrate(15);
-                }
-            }, {passive: true});
+            // 移动端专用导航
+            document.getElementById('mobPrevMonth').onclick = () => change(-1);
+            document.getElementById('mobNextMonth').onclick = () => change(1);
         }
 
-        function showActionMenu() {
-            vibrate(10);
-            // 这里使用简单的原生 confirm/alert 模拟菜单，或者创建一个浮层
-            // 为了代码简洁，这里做一个简单的交互逻辑
-            const action = prompt("MENU COMMANDS:\n1. Save Image (截图)\n2. Export Data (导出数据)\n3. Import Data (导入数据)\n4. Clear Data (清空)", "1");
-            
-            if (action === "1") exportImage();
-            else if (action === "2") exportJson();
-            else if (action === "3") { 
-                if(!STATE.readonly) els.fileInput.click(); 
-                else alert("Unlock first.");
-            }
-            else if (action === "4") clearData();
-        }
+        // --- 工具切换逻辑 ---
+        function setupTools() {
+            els.tools.forEach(btn => {
+                // 使用 touchstart 提升移动端响应速度
+                btn.addEventListener('click', (e) => {
+                    if (STATE.readonly) return;
+                    triggerHaptic(10); // 震动
 
-        function toggleReadonly(force) {
-            STATE.readonly = force;
-            if (STATE.readonly) {
-                els.readonlyBar.style.display = 'block';
-                els.btnReadonly.querySelector('svg').style.stroke = 'var(--orange)';
-                document.querySelector('.mobile-control-deck').style.filter = 'grayscale(1) opacity(0.5)';
-                document.querySelector('.mobile-control-deck').style.pointerEvents = 'none';
-            } else {
-                els.readonlyBar.style.display = 'none';
-                els.btnReadonly.querySelector('svg').style.stroke = 'currentColor';
-                document.querySelector('.mobile-control-deck').style.filter = 'none';
-                document.querySelector('.mobile-control-deck').style.pointerEvents = 'auto';
-            }
-            renderCalendar(); // 重新渲染以禁用/启用格子交互
-        }
+                    els.tools.forEach(b => b.classList.remove('active'));
+                    // 注意：因为有两组一样的按钮（可能），这里我们通过 dataset 同步
+                    const toolType = e.currentTarget.dataset.tool;
+                    
+                    document.querySelectorAll(`.tool-btn[data-tool="${toolType}"]`).forEach(b => {
+                        b.classList.add('active');
+                        // 按钮按下动画
+                        gsap.fromTo(b, {scale:0.8}, {scale:1, duration:0.2, ease:"back.out(2)"});
+                    });
 
-        function changeMonth(delta) {
-            // 简单的切换动画
-            gsap.to(els.grid, {
-                x: delta > 0 ? -20 : 20, 
-                opacity: 0, 
-                duration: 0.1, 
-                onComplete: () => {
-                    STATE.currentDate.setMonth(STATE.currentDate.getMonth() + delta);
-                    renderCalendar();
-                    updateStats();
-                    gsap.fromTo(els.grid, {x: delta > 0 ? 20 : -20, opacity: 0}, {x: 0, opacity: 1, duration: 0.2});
-                }
+                    STATE.tool = toolType;
+                });
             });
         }
 
-        function renderCalendar() {
-            els.grid.innerHTML = '';
-            const year = STATE.currentDate.getFullYear();
-            const month = STATE.currentDate.getMonth();
-            
-            els.monthLabel.innerText = STATE.currentDate.toLocaleString('en-US', { month: 'short', year: '2-digit' }).toUpperCase();
+        // --- 动作按钮逻辑 ---
+        function setupActions() {
+            const handleReadonly = () => {
+                toggleReadonly(!STATE.readonly);
+                localStorage.setItem(CONFIG.readonlyKey, STATE.readonly);
+                triggerHaptic(20);
+            };
 
-            const firstDay = new Date(year, month, 1);
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const startDay = firstDay.getDay();
+            els.btnReadonly.onclick = handleReadonly;
+            els.mobBtnReadonly.onclick = handleReadonly;
 
-            for (let i = 0; i < startDay; i++) {
-                const div = document.createElement('div');
-                div.className = 'day-cell empty-cell';
-                div.style.background = '#dcdad0';
-                els.grid.appendChild(div);
-            }
-
-            const today = new Date();
-            const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
-
-            for (let day = 1; day <= daysInMonth; day++) {
-                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const cell = document.createElement('div');
-                cell.className = 'day-cell';
-                if (isCurrentMonth && day === today.getDate()) cell.classList.add('is-today');
-
-                const num = document.createElement('div');
-                num.className = 'date-num';
-                num.innerText = day;
-                
-                const mark = document.createElement('div');
-                mark.className = 'shift-mark';
-                
-                cell.appendChild(num);
-                cell.appendChild(mark);
-
-                updateCellVisual(cell, STATE.data[dateStr] || 'none');
-
-                // 交互
-                if (!STATE.readonly) {
-                    // 支持快速点击
-                    cell.onclick = () => {
-                        vibrate(5);
-                        handleInteraction(dateStr, cell);
-                    };
+            const handleClear = () => {
+                if (STATE.readonly) return;
+                if(confirm("Confirm: CLEAR ALL DATA?")) {
+                    STATE.data = {};
+                    saveData();
+                    renderCalendar();
+                    triggerHaptic([50, 50, 50]);
                 }
+            };
+            document.getElementById('btnClear').onclick = handleClear;
+            document.getElementById('mobBtnClear').onclick = handleClear;
 
-                els.grid.appendChild(cell);
-            }
+            document.getElementById('btnExportJson').onclick = exportJson;
+            document.getElementById('mobBtnSave').onclick = exportImage; // 移动端保存主要是图片
+            document.getElementById('btnExportImg').onclick = exportImage;
+            
+            // 文件导入
+            const fileInput = document.getElementById('fileInput');
+            fileInput.onchange = importJson;
+            document.getElementById('btnExportJson').oncontextmenu = (e) => {
+                e.preventDefault();
+                if(!STATE.readonly) fileInput.click();
+            };
         }
 
-        function handleInteraction(dateStr, cell) {
+        // --- 核心业务 ---
+        function toggleReadonly(forceStatus) {
+            STATE.readonly = forceStatus;
+            const action = STATE.readonly ? 'add' : 'remove';
+            
+            els.btnReadonly.classList[action]('active');
+            els.mobBtnReadonly.classList[action]('active');
+            els.toolSelector.classList[STATE.readonly ? 'add' : 'remove']('disabled');
+            els.readonlyIndicator.classList[STATE.readonly ? 'add' : 'remove']('show');
+            
+            els.btnReadonly.innerText = STATE.readonly ? 'UNLOCK' : 'READONLY';
+            
+            // 刷新日历以更新格子状态
+            renderCalendar();
+        }
+
+        function saveData() {
+            if(STATE.readonly) return;
+            localStorage.setItem(CONFIG.storageKey, JSON.stringify(STATE.data));
+            updateStats();
+        }
+
+        function handleCellInteract(dateStr) {
+            if (STATE.readonly) {
+                // 只读模式下的反馈动画
+                gsap.to(els.readonlyIndicator, {x: 5, yoyo: true, repeat: 3, duration: 0.05});
+                triggerHaptic(50); // 长震动表示错误
+                return;
+            }
+
             const current = STATE.data[dateStr] || 'none';
             let next = 'none';
 
@@ -610,21 +715,70 @@
                 if (next === 'none') delete STATE.data[dateStr];
                 else STATE.data[dateStr] = next;
                 
-                updateCellVisual(cell, next);
                 saveData();
-                
-                // 视觉反馈动画
-                gsap.fromTo(cell, {scale: 0.9}, {scale: 1, duration: 0.3, ease: "back.out(2)"});
+                updateCell(document.querySelector(`.day-cell[data-date="${dateStr}"]`), next);
+                triggerHaptic(15); // 操作成功的轻震动
             }
         }
 
-        function updateCellVisual(cell, type) {
-            cell.className = 'day-cell' + (cell.classList.contains('is-today') ? ' is-today' : '');
+        // --- 渲染 ---
+        function renderCalendar() {
+            els.grid.innerHTML = '';
+            const year = STATE.currentDate.getFullYear();
+            const month = STATE.currentDate.getMonth();
+            const label = STATE.currentDate.toLocaleString('en-US', { month: 'short', year: '2-digit' }).toUpperCase();
+            
+            els.monthLabel.innerText = label;
+            els.mobMonthLabel.innerText = label;
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const todayStr = new Date().toISOString().slice(0,10);
+
+            // 填充空白
+            for(let i=0; i<firstDay; i++) {
+                els.grid.appendChild(createDiv('day-cell empty-cell'));
+            }
+
+            for(let day=1; day<=daysInMonth; day++) {
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const cell = createDiv('day-cell');
+                cell.dataset.date = dateStr;
+                
+                if(dateStr === todayStr) cell.classList.add('is-today');
+                if(STATE.readonly) cell.classList.add('disabled');
+
+                cell.innerHTML = `<div class="date-num">${day}</div><div class="shift-mark"></div>`;
+                
+                updateCell(cell, STATE.data[dateStr] || 'none');
+
+                // 交互绑定 (兼顾 PC 和 Mobile)
+                cell.onmousedown = () => handleCellInteract(dateStr);
+                // 移动端 Touch 优化：防止延迟，但允许滚动
+                // 简单的 click 在 viewport 设置了 no-scalable 后其实延迟很小
+                // 保持 click 即可，复杂 touch 逻辑容易导致无法滚动
+
+                els.grid.appendChild(cell);
+            }
+        }
+
+        function createDiv(className) {
+            const d = document.createElement('div');
+            d.className = className;
+            return d;
+        }
+
+        function updateCell(cell, type) {
+            if(!cell) return;
+            cell.classList.remove('status-day', 'status-night', 'status-off');
             const mark = cell.querySelector('.shift-mark');
             
             if (type !== 'none') {
                 cell.classList.add(`status-${type}`);
                 mark.innerText = type === 'day' ? 'DAY' : (type === 'night' ? 'NGT' : 'OFF');
+                
+                // 只有新增状态时才播放动画
+                gsap.fromTo(mark, {opacity:0, x: -5}, {opacity:1, x:0, duration: 0.2});
             } else {
                 mark.innerText = '';
             }
@@ -634,83 +788,87 @@
             const year = STATE.currentDate.getFullYear();
             const month = STATE.currentDate.getMonth() + 1;
             const prefix = `${year}-${String(month).padStart(2, '0')}`;
-
-            let counts = { day: 0, night: 0, off: 0 };
-            Object.keys(STATE.data).forEach(date => {
-                if (date.startsWith(prefix)) {
-                    const type = STATE.data[date];
-                    if (counts[type] !== undefined) counts[type]++;
+            
+            let c = {day:0, night:0, off:0};
+            Object.keys(STATE.data).forEach(k => {
+                if(k.startsWith(prefix)) {
+                    const t = STATE.data[k];
+                    if(c[t] !== undefined) c[t]++;
                 }
             });
 
-            els.stats.day.innerText = counts.day;
-            els.stats.night.innerText = counts.night;
-            els.stats.off.innerText = counts.off;
-            els.stats.total.innerText = counts.day + counts.night;
+            animateNum(els.stats.day, c.day);
+            animateNum(els.stats.night, c.night);
+            animateNum(els.stats.off, c.off);
+            animateNum(els.stats.total, c.day + c.night);
         }
 
-        function saveData() {
-            localStorage.setItem(CONFIG.storageKey, JSON.stringify(STATE.data));
-            updateStats();
+        function animateNum(el, val) {
+            gsap.to(el, { innerText: val, duration: 0.5, snap: { innerText: 1 } });
         }
 
-        // --- 功能 ---
-        function exportImage() {
-            if (STATE.readonly) { alert("Please Unlock First"); return; }
-            const target = document.getElementById('capture-target');
-            
-            // 截图前优化样式
-            const originalWidth = target.style.width;
-            target.style.width = "800px"; // 强制宽度保证清晰度
-            target.style.position = "absolute"; // 移出视口防止闪烁
-            target.style.top = "-9999px";
-            document.body.appendChild(target);
+        // --- 工具函数 ---
+        function startClock() {
+            setInterval(() => {
+                document.getElementById('systemTime').innerText = new Date().toLocaleTimeString('en-GB');
+            }, 1000);
+        }
 
-            html2canvas(target, { scale: 2, backgroundColor: "#E6E4D8" }).then(canvas => {
-                const link = document.createElement('a');
-                link.download = `Shift_${els.monthLabel.innerText}.png`;
-                link.href = canvas.toDataURL();
-                link.click();
-            }).finally(() => {
-                // 还原
-                target.style.width = "";
-                target.style.position = "";
-                target.style.top = "";
-                els.scrollArea.appendChild(target);
-            });
+        function triggerHaptic(pattern) {
+            if (navigator.vibrate) navigator.vibrate(pattern);
         }
 
         function exportJson() {
             const blob = new Blob([JSON.stringify(STATE.data, null, 2)], {type: 'application/json'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'shift_data.json';
+            a.download = `shift_data_${new Date().toISOString().slice(0,10)}.json`;
             a.click();
         }
 
         function importJson(e) {
-            const file = e.target.files[0];
-            if (!file) return;
             const reader = new FileReader();
             reader.onload = (evt) => {
-                if(confirm("Overwrite current data?")) {
-                    try {
-                        STATE.data = JSON.parse(evt.target.result);
-                        saveData();
-                        renderCalendar();
-                    } catch(e) { alert("Error Data"); }
-                }
+                try {
+                    STATE.data = JSON.parse(evt.target.result);
+                    saveData();
+                    renderCalendar();
+                } catch(err) { alert("DATA CORRUPTED"); }
             };
-            reader.readAsText(file);
+            reader.readAsText(e.target.files[0]);
         }
 
-        function clearData() {
-            if (STATE.readonly) return;
-            if(confirm("CLEAR ALL DATA?")) {
-                STATE.data = {};
-                saveData();
-                renderCalendar();
-            }
+        function exportImage() {
+            const target = document.getElementById('capture-target');
+            const pHeader = document.getElementById('print-header');
+            const pFooter = document.getElementById('print-footer');
+            const pLabel = document.getElementById('print-month-label');
+            
+            // 准备截图状态
+            pHeader.style.display = 'block';
+            pFooter.style.display = 'block';
+            pLabel.innerText = els.monthLabel.innerText;
+            
+            // 如果是移动端，强制设置一个宽度以保证截图清晰度
+            const originalWidth = target.style.width;
+            if (window.innerWidth < 768) target.style.width = "800px";
+
+            // 临时解除只读样式（为了截图好看）
+            const wasReadonly = STATE.readonly;
+            if(wasReadonly) document.querySelectorAll('.day-cell').forEach(c => c.classList.remove('disabled'));
+
+            html2canvas(target, { scale: 2, backgroundColor: "#E6E4D8" }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Schedule_${els.monthLabel.innerText}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            }).finally(() => {
+                // 恢复
+                pHeader.style.display = 'none';
+                pFooter.style.display = 'none';
+                target.style.width = originalWidth;
+                if(wasReadonly) renderCalendar(); // 重新渲染恢复 disabled 状态
+            });
         }
 
         init();
